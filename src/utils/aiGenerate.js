@@ -12,7 +12,7 @@ export async function generateGameContent(game) {
   const context = "Game: Philadelphia Phillies vs " + opponent + ", " + date + "\nResult: Phillies " + result.toUpperCase() + " " + philliesScore + "-" + opponentScore + "\nVenue: " + venue + "\nPHI SP: " + phiSP + "\nOPP SP: " + oppSPStr + "\nPHI hitters: " + (phiBatters || "none stood out") + "\nOPP hitters: " + (oppBatters || "none");
   const prompt = "You are the narrator of \"Phillies Story Quest,\" an accessible baseball game app.\n\nBox score data:\n" + context + "\n\nReturn a JSON object with exactly two fields:\n1. \"story\" - A vivid 3-4 sentence second-person recap (\"You were there at Citizens Bank Park...\"). Emotionally resonant, uses the real stats.\n2. \"questions\" - Array of exactly 10 objects, each with:\n   - \"q\": question about this specific game\n   - \"a\": array of exactly 2 plausible answer strings (1-2 sentences each)\n   - \"correct\": 0 or 1\n\nRespond ONLY with valid JSON. No markdown, no backticks, no explanation.";
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await fetch("/api/anthropic/v1/messages", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

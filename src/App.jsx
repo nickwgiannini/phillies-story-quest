@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { loadDB, saveDB } from "./utils/storage.js";
 import { fetchLatestPhilliesGame } from "./utils/gameData.js";
 import { generateGameContent } from "./utils/aiGenerate.js";
@@ -44,7 +44,7 @@ export default function App() {
       if (!latestGame) throw new Error("Could not fetch game data.");
       const currentDb = dbRef.current;
       const cached = currentDb["content_" + latestGame.id];
-      if (cached && !forceRefresh) {
+      if (cached && !forceRefresh && cached.questions?.length > 0) {
         setGame(latestGame); setContent(cached); setScreen(SCREENS.STORY); return;
       }
       setGame(latestGame);
@@ -53,11 +53,13 @@ export default function App() {
       const generated = await generateGameContent(latestGame);
       setContent(generated);
       setLoadingContent(false);
-      setDb((prevDb) => {
-        const newDb = { ...prevDb, ["content_" + latestGame.id]: generated, lastGameId: latestGame.id };
-        saveDB(newDb);
-        return newDb;
-      });
+      if (generated.questions?.length > 0) {
+        setDb((prevDb) => {
+          const newDb = { ...prevDb, ["content_" + latestGame.id]: generated, lastGameId: latestGame.id };
+          saveDB(newDb);
+          return newDb;
+        });
+      }
     } catch (err) {
       setError(err.message);
       setScreen(SCREENS.LOADING);
@@ -125,7 +127,14 @@ export default function App() {
         <TopBar ttsOn={ttsOn} setTtsOn={setTtsOn} overallAvg={overallAvg} onHistory={() => { stopSpeech(); setScreen(SCREENS.HISTORY); }} notifStatus={notifStatus} onEnableNotifs={handleEnableNotifs} />
         {game && <GameHeader game={game} />}
         {screen === SCREENS.STORY && <StoryScreen story={content?.story} ttsOn={ttsOn} onStartQuiz={() => { stopSpeech(); setScreen(SCREENS.QUIZ); }} loading={loadingContent} />}
-        {screen === SCREENS.QUIZ && content?.questions && <QuizScreen questions={content.questions} ttsOn={ttsOn} onFinish={handleQuizFinish} />}
+        {screen === SCREENS.QUIZ && content?.questions?.length > 0 && <QuizScreen questions={content.questions} ttsOn={ttsOn} onFinish={handleQuizFinish} />}
+        {screen === SCREENS.QUIZ && !(content?.questions?.length > 0) && (
+          <div style={{ textAlign: "center", padding: "40px 20px" }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>⚾</div>
+            <div style={{ color: "#f87171", fontWeight: 700, fontSize: 15, marginBottom: 16, fontFamily: "'Barlow Condensed', sans-serif" }}>Quiz not available yet — check back soon!</div>
+            <button onClick={() => setScreen(SCREENS.STORY)} style={{ background: "rgba(232,24,40,0.15)", border: "1px solid rgba(232,24,40,0.3)", borderRadius: 10, padding: "10px 20px", color: "#E81828", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Back to Story</button>
+          </div>
+        )}
         {screen === SCREENS.RESULTS && <ResultsScreen answers={answers} questions={content?.questions ?? []} ttsOn={ttsOn} onPlayAgain={handlePlayAgain} onHistory={() => { stopSpeech(); setScreen(SCREENS.HISTORY); }} />}
         {screen === SCREENS.HISTORY && <HistoryScreen db={db} setDb={setDb} onBack={() => setScreen(SCREENS.STORY)} />}
       </div>

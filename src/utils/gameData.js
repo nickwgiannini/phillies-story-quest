@@ -1,4 +1,4 @@
-const ESPN_URL = "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams/phi/schedule";
+﻿const ESPN_URL = "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams/phi/schedule";
 
 export async function fetchLatestPhilliesGame() {
   try {
@@ -16,8 +16,8 @@ export async function fetchLatestPhilliesGame() {
     const away = comp.competitors.find((c) => c.homeAway === "away");
     const phi = [home, away].find((t) => t.team.abbreviation === "PHI");
     const opp = [home, away].find((t) => t.team.abbreviation !== "PHI");
-    const philliesScore = parseInt(phi?.score ?? 0);
-    const opponentScore = parseInt(opp?.score ?? 0);
+    const philliesScore = parseInt(phi?.score) || 0;
+    const opponentScore = parseInt(opp?.score) || 0;
 
     const boxScore = await fetchBoxScore(game.id);
 

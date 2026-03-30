@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import { stopSpeech } from "../utils/tts.js";
 
 function Btn({ onClick, bg, border, color, children, ariaLabel }) {
@@ -17,7 +17,20 @@ export default function TopBar({ ttsOn, setTtsOn, overallAvg, onHistory, notifSt
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 0 20px", flexWrap: "wrap", gap: 8 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <span style={{ fontSize: 30 }}>⚾</span>
+        <div style={{ position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+          <span style={{ fontSize: 30, lineHeight: 1 }}>⚾</span>
+          {overallAvg !== null && (
+            <span style={{
+              position: "absolute", bottom: -4, right: -14,
+              background: "#E81828", border: "1.5px solid #0a0f14", borderRadius: 99,
+              padding: "2px 6px", fontSize: 9, fontWeight: 900, color: "#fff",
+              lineHeight: 1, whiteSpace: "nowrap",
+              fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: 0.5,
+            }}>
+              {overallAvg}%
+            </span>
+          )}
+        </div>
         <div>
           <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 4, textTransform: "uppercase", color: "#E81828", fontFamily: "'Barlow Condensed', sans-serif" }}>
             Citizens Bank Park
@@ -28,11 +41,6 @@ export default function TopBar({ ttsOn, setTtsOn, overallAvg, onHistory, notifSt
         </div>
       </div>
       <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-        {overallAvg !== null && (
-          <span style={{ background: "rgba(232,24,40,0.12)", border: "1px solid rgba(232,24,40,0.3)", borderRadius: 99, padding: "5px 12px", fontSize: 12, fontWeight: 700, color: "#E81828", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: 1 }}>
-            AVG {overallAvg}%
-          </span>
-        )}
         {notifStatus === "default" && (
           <Btn onClick={onEnableNotifs} bg="rgba(0,45,98,0.3)" border="rgba(0,45,98,0.6)" color="#7EB3FF" ariaLabel="Enable notifications">
             Notify

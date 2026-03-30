@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+﻿import React, { useState, useEffect, useRef } from "react";
 import { loadDB, saveDB } from "./utils/storage.js";
 import { fetchLatestPhilliesGame } from "./utils/gameData.js";
 import { generateGameContent } from "./utils/aiGenerate.js";
@@ -26,12 +26,15 @@ export default function App() {
   const [loadingContent, setLoadingContent] = useState(false);
   const [error, setError] = useState(null);
   const pollRef = useRef(null);
+  const dbRef = useRef(db);
+  useEffect(() => { dbRef.current = db; }, [db]);
 
   useEffect(() => { registerServiceWorker(); loadGame(); }, []);
+
   useEffect(() => {
     pollRef.current = setInterval(() => checkForNewGame(), POLL_MS);
     return () => clearInterval(pollRef.current);
-  }, [db.lastGameId]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadGame(forceRefresh = false) {
     setScreen(SCREENS.LOADING);
@@ -39,17 +42,22 @@ export default function App() {
     try {
       const latestGame = await fetchLatestPhilliesGame();
       if (!latestGame) throw new Error("Could not fetch game data.");
-      const cached = db["content_" + latestGame.id];
-      if (cached && !forceRefresh) { setGame(latestGame); setContent(cached); setScreen(SCREENS.STORY); return; }
+      const currentDb = dbRef.current;
+      const cached = currentDb["content_" + latestGame.id];
+      if (cached && !forceRefresh) {
+        setGame(latestGame); setContent(cached); setScreen(SCREENS.STORY); return;
+      }
       setGame(latestGame);
       setLoadingContent(true);
       setScreen(SCREENS.STORY);
       const generated = await generateGameContent(latestGame);
       setContent(generated);
       setLoadingContent(false);
-      const newDb = { ...db, ["content_" + latestGame.id]: generated, lastGameId: latestGame.id };
-      setDb(newDb);
-      saveDB(newDb);
+      setDb((prevDb) => {
+        const newDb = { ...prevDb, ["content_" + latestGame.id]: generated, lastGameId: latestGame.id };
+        saveDB(newDb);
+        return newDb;
+      });
     } catch (err) {
       setError(err.message);
       setScreen(SCREENS.LOADING);
@@ -60,8 +68,11 @@ export default function App() {
   async function checkForNewGame() {
     try {
       const latestGame = await fetchLatestPhilliesGame();
-      if (!latestGame || latestGame.id === db.lastGameId) return;
-      sendLocalNotification("Phillies Story Quest", `New game: PHI ${latestGame.philliesScore} - ${latestGame.opponentAbbr} ${latestGame.opponentScore}. Tap to play!`);
+      if (!latestGame || latestGame.id === dbRef.current.lastGameId) return;
+      sendLocalNotification(
+        "Phillies Story Quest",
+        `Game over! PHI ${latestGame.philliesScore} - ${latestGame.opponentAbbr} ${latestGame.opponentScore}. New quiz ready - tap to play!`
+      );
       await loadGame(true);
     } catch {}
   }
@@ -75,9 +86,17 @@ export default function App() {
     const correct = finalAnswers.filter((a) => a.correct).length;
     const total = finalAnswers.length;
     const score = Math.round((correct / total) * 100);
-    const session = { id: Date.now(), game: "PHI vs " + (game?.opponentAbbr ?? "???"), date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }), score, correct, total };
-    const newDb = { ...db, sessions: [...db.sessions, session] };
-    setDb(newDb); saveDB(newDb);
+    const session = {
+      id: Date.now(),
+      game: "PHI vs " + (game?.opponentAbbr ?? "???"),
+      date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+      score, correct, total,
+    };
+    setDb((prevDb) => {
+      const newDb = { ...prevDb, sessions: [...prevDb.sessions, session] };
+      saveDB(newDb);
+      return newDb;
+    });
     setAnswers(finalAnswers);
     setScreen(SCREENS.RESULTS);
   }
@@ -91,7 +110,7 @@ export default function App() {
     return (
       <div style={outer}>
         <div style={{ ...inner, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh" }}>
-          <span style={{ fontSize: 48, marginBottom: 16 }}>?</span>
+          <span style={{ fontSize: 48, marginBottom: 16 }}>⚾</span>
           <LoadingDots />
           <div style={{ fontSize: 13, color: "#a09a90", marginTop: 12, fontWeight: 600 }}>{error ? "Error: " + error : "Loading latest Phillies game..."}</div>
           {error && <button onClick={() => loadGame()} style={{ marginTop: 16, background: "rgba(232,24,40,0.15)", border: "1px solid rgba(232,24,40,0.3)", borderRadius: 10, padding: "10px 20px", color: "#E81828", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Retry</button>}

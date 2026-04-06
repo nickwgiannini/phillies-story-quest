@@ -1,7 +1,6 @@
 ﻿import React, { useState, useEffect, useRef } from "react";
 import { loadDB, saveDB } from "./utils/storage.js";
 import { fetchLatestPhilliesGame } from "./utils/gameData.js";
-import { generateGameContent } from "./utils/aiGenerate.js";
 import { registerServiceWorker, requestNotificationPermission, sendLocalNotification } from "./utils/notifications.js";
 import { stopSpeech } from "./utils/tts.js";
 import TopBar from "./components/TopBar.jsx";
@@ -23,7 +22,6 @@ export default function App() {
   const [answers, setAnswers] = useState([]);
   const [ttsOn, setTtsOn] = useState(false);
   const [notifStatus, setNotifStatus] = useState(() => (typeof Notification !== "undefined" ? Notification.permission : "unsupported"));
-  const [loadingContent, setLoadingContent] = useState(false);
   const [error, setError] = useState(null);
   const pollRef = useRef(null);
   const dbRef = useRef(db);
@@ -40,22 +38,22 @@ export default function App() {
     setScreen(SCREENS.LOADING);
     setError(null);
     try {
+      if (forceRefresh) {
+        // Clear localStorage cache so generateContentFromBoxScore re-generates
+        try {
+          const currentDb = dbRef.current;
+          if (currentDb.lastGameId) localStorage.removeItem(`phillies_content_${currentDb.lastGameId}`);
+        } catch {}
+      }
       const latestGame = await fetchLatestPhilliesGame();
       if (!latestGame) throw new Error("Could not fetch game data.");
-      const currentDb = dbRef.current;
-      const cached = currentDb["content_" + latestGame.id];
-      if (cached && !forceRefresh && cached.questions?.length > 0) {
-        setGame(latestGame); setContent(cached); setScreen(SCREENS.STORY); return;
-      }
-      setGame(latestGame);
-      setLoadingContent(true);
+      const { story, questions, ...gameData } = latestGame;
+      setGame(gameData);
+      setContent({ story, questions });
       setScreen(SCREENS.STORY);
-      const generated = await generateGameContent(latestGame);
-      setContent(generated);
-      setLoadingContent(false);
-      if (generated.questions?.length > 0) {
+      if (questions?.length > 0) {
         setDb((prevDb) => {
-          const newDb = { ...prevDb, ["content_" + latestGame.id]: generated, lastGameId: latestGame.id };
+          const newDb = { ...prevDb, lastGameId: latestGame.id };
           saveDB(newDb);
           return newDb;
         });
@@ -63,7 +61,6 @@ export default function App() {
     } catch (err) {
       setError(err.message);
       setScreen(SCREENS.LOADING);
-      setLoadingContent(false);
     }
   }
 
@@ -126,7 +123,7 @@ export default function App() {
       <div style={inner}>
         <TopBar ttsOn={ttsOn} setTtsOn={setTtsOn} overallAvg={overallAvg} onHistory={() => { stopSpeech(); setScreen(SCREENS.HISTORY); }} notifStatus={notifStatus} onEnableNotifs={handleEnableNotifs} />
         {game && <GameHeader game={game} />}
-        {screen === SCREENS.STORY && <StoryScreen story={content?.story} ttsOn={ttsOn} onStartQuiz={() => { stopSpeech(); setScreen(SCREENS.QUIZ); }} loading={loadingContent} />}
+        {screen === SCREENS.STORY && <StoryScreen story={content?.story} ttsOn={ttsOn} onStartQuiz={() => { stopSpeech(); setScreen(SCREENS.QUIZ); }} />}
         {screen === SCREENS.QUIZ && content?.questions?.length > 0 && <QuizScreen questions={content.questions} ttsOn={ttsOn} onFinish={handleQuizFinish} />}
         {screen === SCREENS.QUIZ && !(content?.questions?.length > 0) && (
           <div style={{ textAlign: "center", padding: "40px 20px" }}>

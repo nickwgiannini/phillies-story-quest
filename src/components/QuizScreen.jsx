@@ -1,5 +1,18 @@
-﻿import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { speak, stopSpeech } from "../utils/tts.js";
+
+// Map punctuation to spoken labels so TTS doesn't go silent on symbols
+function getCharLabel(char) {
+  const labels = {
+    ".": "period",
+    ",": "comma",
+    "'": "apostrophe",
+    "-": "dash",
+    "!": "exclamation mark",
+    "?": "question mark",
+  };
+  return labels[char] ?? char;
+}
 
 export default function QuizScreen({ questions, ttsOn, onFinish }) {
   const [current, setCurrent] = useState(0);
@@ -13,15 +26,32 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
 
   const inputRef = useRef(null);
   const wrongFlashTimer = useRef(null);
+  // Guards against stale onEnd callbacks when user switches options or questions
+  const ttsActive = useRef(false);
+
   const q = questions[current];
   const targetText = selectedOption !== null ? q.a[selectedOption] : "";
   const isComplete = targetText.length > 0 && typedLength === targetText.length;
 
+  // The index of the next character the user must type (skip over any auto-filled spaces)
+  const currentCharIdx = (() => {
+    if (isComplete || selectedOption === null) return -1;
+    let i = typedLength;
+    while (i < targetText.length && targetText[i] === " ") i++;
+    return i < targetText.length ? i : -1;
+  })();
+
+  // Read question aloud whenever it changes
   useEffect(() => {
+    ttsActive.current = false;
     if (ttsOn && q) speak(q.q);
-    return () => stopSpeech();
+    return () => {
+      ttsActive.current = false;
+      stopSpeech();
+    };
   }, [current, ttsOn]);
 
+  // Focus hidden input when an option is selected
   useEffect(() => {
     if (selectedOption !== null) {
       setTimeout(() => inputRef.current?.focus(), 50);
@@ -31,7 +61,6 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
   useEffect(() => () => clearTimeout(wrongFlashTimer.current), []);
 
   function flashWrong() {
-    if (wrongFlash) return;
     setWrongFlash(true);
     clearTimeout(wrongFlashTimer.current);
     wrongFlashTimer.current = setTimeout(() => setWrongFlash(false), 2000);
@@ -39,28 +68,82 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
 
   function handleOptionSelect(idx) {
     if (wrongOptionIdx === idx) return;
+
+    // Cancel any in-flight TTS callbacks before resetting
+    ttsActive.current = false;
+    stopSpeech();
+
     setSelectedOption(idx);
     setTypedLength(0);
     setWrongFlash(false);
     setWrongAnswerMsg(false);
     clearTimeout(wrongFlashTimer.current);
     if (inputRef.current) inputRef.current.value = "";
+
+    if (ttsOn) {
+      const answer = q.a[idx];
+      // Find the first character the user will need to type
+      let firstCharIdx = 0;
+      while (firstCharIdx < answer.length && answer[firstCharIdx] === " ") firstCharIdx++;
+
+      ttsActive.current = true;
+      // Read the full answer, then call out the first letter
+      speak(answer, () => {
+        if (!ttsActive.current) return;
+        if (firstCharIdx < answer.length) speak(getCharLabel(answer[firstCharIdx]));
+      });
+    }
   }
 
   function handleInputChange(e) {
     if (selectedOption === null) return;
-    const target = q.a[selectedOption];
-    const newVal = e.target.value;
-    let correctLen = 0;
-    for (let i = 0; i < newVal.length; i++) {
-      if (i >= target.length) break;
-      if (newVal[i].toLowerCase() === target[i].toLowerCase()) { correctLen++; } else { break; }
-    }
-    if (correctLen === newVal.length) {
-      setTypedLength(correctLen);
+    const val = e.target.value;
+    if (!val) return;
+
+    const typedChar = val[val.length - 1]; // The character just entered
+    e.target.value = "";                   // Clear immediately; one char at a time
+
+    const answer = q.a[selectedOption];
+
+    // Skip past any spaces at the current position to find expected char
+    let expectedIdx = typedLength;
+    while (expectedIdx < answer.length && answer[expectedIdx] === " ") expectedIdx++;
+    if (expectedIdx >= answer.length) return;
+
+    if (typedChar.toLowerCase() === answer[expectedIdx].toLowerCase()) {
+      // ✓ Correct — advance past this char and auto-fill any following spaces
+      let newLen = expectedIdx + 1;
+      let crossedWordBoundary = false;
+      while (newLen < answer.length && answer[newLen] === " ") {
+        newLen++;
+        crossedWordBoundary = true;
+      }
+
+      // Cancel any pending TTS callbacks (e.g., the answer-reading onEnd)
+      ttsActive.current = false;
+
+      if (newLen >= answer.length) {
+        // Typing is complete — submit button will appear; nothing more to announce
+      } else if (crossedWordBoundary) {
+        // Just finished a word — say the word, then call out the next letter
+        if (ttsOn) {
+          const prevSpace = answer.lastIndexOf(" ", expectedIdx - 1);
+          const word = answer.slice(prevSpace + 1, expectedIdx + 1);
+          ttsActive.current = true;
+          speak(word, () => {
+            if (!ttsActive.current) return;
+            speak(getCharLabel(answer[newLen]));
+          });
+        }
+      } else {
+        // Mid-word — call out the next letter to type
+        if (ttsOn) speak(getCharLabel(answer[newLen]));
+      }
+
+      setTypedLength(newLen);
+      setWrongFlash(false);
     } else {
-      e.target.value = target.slice(0, correctLen);
-      setTypedLength(correctLen);
+      // ✗ Wrong character — flash red, don't advance
       flashWrong();
     }
   }
@@ -74,11 +157,12 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
   function handleSubmit() {
     const isCorrect = selectedOption === q.correct;
     if (isCorrect) {
+      ttsActive.current = false;
       const newAnswer = { correct: !firstAttemptWrong };
       const newAnswers = [...answers, newAnswer];
       setAnswers(newAnswers);
       stopSpeech();
-      if (ttsOn) speak(firstAttemptWrong ? "Got it. " + q.a[q.correct] : "Correct! " + q.a[q.correct]);
+      if (ttsOn) speak(firstAttemptWrong ? "Got it." : "Correct!");
       if (current + 1 >= questions.length) {
         onFinish(newAnswers);
       } else {
@@ -89,6 +173,8 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
         if (inputRef.current) inputRef.current.value = "";
       }
     } else {
+      ttsActive.current = false;
+      stopSpeech();
       if (ttsOn) speak("Not quite. Try the other answer.");
       setFirstAttemptWrong(true); setWrongAnswerMsg(true); setWrongOptionIdx(selectedOption);
       setSelectedOption(null); setTypedLength(0); setWrongFlash(false);
@@ -162,13 +248,15 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
           </div>
           <div style={{ fontSize: 17, fontWeight: 700, letterSpacing: 1.5, lineHeight: 2, fontFamily: "'Barlow Condensed', sans-serif", paddingRight: 32 }}>
             {targetText.split("").map((char, i) => {
-              const typed = i < typedLength, isCursor = i === typedLength;
+              const typed = i < typedLength;
+              const isCurrentChar = i === currentCharIdx;
               return (
                 <span key={i} style={{
-                  color: typed ? "#4ade80" : isCursor ? "#FAEBD7" : "#444",
-                  background: isCursor ? "rgba(255,255,255,0.08)" : "transparent",
-                  borderBottom: isCursor ? "2px solid #FAEBD7" : "2px solid transparent",
-                  padding: "0 1px", transition: "color 0.08s ease",
+                  color: typed ? "#4ade80" : isCurrentChar ? "#000" : "#444",
+                  background: isCurrentChar ? "#F0C040" : "transparent",
+                  borderRadius: isCurrentChar ? "3px" : "0",
+                  padding: "0 2px",
+                  transition: "color 0.08s ease, background 0.08s ease",
                 }}>{char}</span>
               );
             })}

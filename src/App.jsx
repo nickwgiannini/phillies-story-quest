@@ -1,7 +1,7 @@
 ﻿import React, { useState, useEffect, useRef } from "react";
 import { loadDB, saveDB } from "./utils/storage.js";
 import { fetchLatestPhilliesGame } from "./utils/gameData.js";
-import { registerServiceWorker, requestNotificationPermission, sendLocalNotification } from "./utils/notifications.js";
+import { requestNotificationPermission, sendLocalNotification } from "./utils/notifications.js";
 import { stopSpeech } from "./utils/tts.js";
 import TopBar from "./components/TopBar.jsx";
 import GameHeader from "./components/GameHeader.jsx";
@@ -20,14 +20,14 @@ export default function App() {
   const [game, setGame] = useState(null);
   const [content, setContent] = useState(null);
   const [answers, setAnswers] = useState([]);
-  const [ttsOn, setTtsOn] = useState(false);
+  const [ttsOn, setTtsOn] = useState(true);
   const [notifStatus, setNotifStatus] = useState(() => (typeof Notification !== "undefined" ? Notification.permission : "unsupported"));
   const [error, setError] = useState(null);
   const pollRef = useRef(null);
   const dbRef = useRef(db);
   useEffect(() => { dbRef.current = db; }, [db]);
 
-  useEffect(() => { registerServiceWorker(); loadGame(); }, []);
+  useEffect(() => { loadGame(); }, []);
 
   useEffect(() => {
     pollRef.current = setInterval(() => checkForNewGame(), POLL_MS);
@@ -42,7 +42,7 @@ export default function App() {
         // Clear localStorage cache so generateContentFromBoxScore re-generates
         try {
           const currentDb = dbRef.current;
-          if (currentDb.lastGameId) localStorage.removeItem(`phillies_content_${currentDb.lastGameId}`);
+          if (currentDb.lastGameId) localStorage.removeItem(`phillies_content_v2_${currentDb.lastGameId}`);
         } catch {}
       }
       const latestGame = await fetchLatestPhilliesGame();
@@ -103,7 +103,8 @@ export default function App() {
   function handlePlayAgain() { stopSpeech(); setAnswers([]); setScreen(SCREENS.STORY); }
   const overallAvg = db.sessions.length > 0 ? Math.round(db.sessions.reduce((s, x) => s + x.score, 0) / db.sessions.length) : null;
   const outer = { minHeight: "100vh", background: "radial-gradient(ellipse at 20% 0%,rgba(0,45,98,0.25) 0%,transparent 60%),radial-gradient(ellipse at 80% 100%,rgba(232,24,40,0.1) 0%,transparent 50%),#0a0f14" };
-  const inner = { maxWidth: 560, margin: "0 auto", padding: "16px 18px 48px" };
+  // paddingBottom 200px ensures content is always reachable above the tablet keyboard
+  const inner = { maxWidth: 560, margin: "0 auto", padding: "16px 18px 200px" };
 
   if (screen === SCREENS.LOADING) {
     return (
@@ -122,7 +123,12 @@ export default function App() {
     <div style={outer}>
       <div style={inner}>
         <TopBar ttsOn={ttsOn} setTtsOn={setTtsOn} overallAvg={overallAvg} onHistory={() => { stopSpeech(); setScreen(SCREENS.HISTORY); }} notifStatus={notifStatus} onEnableNotifs={handleEnableNotifs} />
-        {game && <GameHeader game={game} />}
+        {/* Sticky wrapper gives the score banner a solid background so it covers scrolled content */}
+        {game && (
+          <div style={{ position: "sticky", top: 0, zIndex: 10, background: "#0a0f14", marginLeft: -18, marginRight: -18, padding: "0 18px 4px" }}>
+            <GameHeader game={game} />
+          </div>
+        )}
         {screen === SCREENS.STORY && <StoryScreen story={content?.story} ttsOn={ttsOn} onStartQuiz={() => { stopSpeech(); setScreen(SCREENS.QUIZ); }} />}
         {screen === SCREENS.QUIZ && content?.questions?.length > 0 && <QuizScreen questions={content.questions} ttsOn={ttsOn} onFinish={handleQuizFinish} />}
         {screen === SCREENS.QUIZ && !(content?.questions?.length > 0) && (

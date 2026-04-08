@@ -5,8 +5,9 @@ function Btn({ onClick, bg, border, color, children, ariaLabel }) {
   return (
     <button onClick={onClick} aria-label={ariaLabel} style={{
       background: bg, border: `1px solid ${border}`, borderRadius: 99,
-      padding: "5px 13px", color, fontSize: 12, fontWeight: 700, cursor: "pointer",
+      padding: "12px 20px", color, fontSize: 14, fontWeight: 700, cursor: "pointer",
       fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: 0.5,
+      minHeight: 48, touchAction: "manipulation", display: "flex", alignItems: "center",
     }}>
       {children}
     </button>

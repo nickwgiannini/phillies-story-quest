@@ -24,7 +24,8 @@ export default function ResultsScreen({ answers, questions, ttsOn, onPlayAgain, 
         <div style={{ fontSize: 14, color: "#a09a90", fontWeight: 500 }}>{correct} / {total} correct</div>
       </div>
       <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 3, textTransform: "uppercase", color: "#a09a90", marginBottom: 10, fontFamily: "'Barlow Condensed', sans-serif" }}>Breakdown</div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 24 }}>
+      {/* Fixed-height scrollable list so action buttons are never pushed off screen on tablet */}
+      <div style={{ maxHeight: "40vh", overflowY: "auto", WebkitOverflowScrolling: "touch", display: "flex", flexDirection: "column", gap: 8, marginBottom: 24 }}>
         {answers.map((a, i) => (
           <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 12, background: a.correct ? "rgba(74,222,128,0.05)" : "rgba(248,113,113,0.05)", border: `1px solid ${a.correct ? "rgba(74,222,128,0.15)" : "rgba(248,113,113,0.15)"}`, borderRadius: 10, padding: "10px 14px" }}>
             <span style={{ fontSize: 14, marginTop: 1 }}>{a.correct ? "✅" : "❌"}</span>
@@ -33,8 +34,8 @@ export default function ResultsScreen({ answers, questions, ttsOn, onPlayAgain, 
         ))}
       </div>
       <div style={{ display: "flex", gap: 10 }}>
-        <button onClick={onPlayAgain} aria-label="Play again" style={{ flex: 1, background: "linear-gradient(135deg,#E81828,#a01020)", border: "none", borderRadius: 12, padding: "14px", color: "#fff", fontSize: 14, fontWeight: 900, cursor: "pointer", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: 2, textTransform: "uppercase" }}>Play Again</button>
-        <button onClick={onHistory} aria-label="View history" style={{ flex: 1, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, padding: "14px", color: "#a09a90", fontSize: 14, fontWeight: 900, cursor: "pointer", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: 2, textTransform: "uppercase" }}>History</button>
+        <button onClick={onPlayAgain} aria-label="Play again" style={{ flex: 1, background: "linear-gradient(135deg,#E81828,#a01020)", border: "none", borderRadius: 12, padding: "14px", color: "#fff", fontSize: 16, fontWeight: 900, cursor: "pointer", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: 2, textTransform: "uppercase", minHeight: 64, touchAction: "manipulation" }}>Play Again</button>
+        <button onClick={onHistory} aria-label="View history" style={{ flex: 1, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, padding: "14px", color: "#a09a90", fontSize: 16, fontWeight: 900, cursor: "pointer", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: 2, textTransform: "uppercase", minHeight: 64, touchAction: "manipulation" }}>History</button>
       </div>
     </div>
   );

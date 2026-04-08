@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
 import { speak, stopSpeech } from "../utils/tts.js";
 
-// Map punctuation to spoken labels so TTS doesn't go silent on symbols
+// Map characters to spoken labels; spaces explicitly announced
 function getCharLabel(char) {
+  if (char === " ") return "space";
   const labels = {
     ".": "period",
     ",": "comma",
@@ -12,6 +13,14 @@ function getCharLabel(char) {
     "?": "question mark",
   };
   return labels[char] ?? char;
+}
+
+// Graceful fallback for questions cached before the 'labels' field was added.
+// Returns the letter name rather than ever truncating the long-form answer text.
+function getLabel(q, idx) {
+  const label = q.labels?.[idx];
+  if (label && label.trim().length > 0) return label;
+  return idx === 0 ? "Option A" : "Option B";
 }
 
 export default function QuizScreen({ questions, ttsOn, onFinish }) {
@@ -25,36 +34,53 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
   const [wrongOptionIdx, setWrongOptionIdx] = useState(null);
 
   const inputRef = useRef(null);
+  const typingAreaRef = useRef(null);
   const wrongFlashTimer = useRef(null);
-  // Guards against stale onEnd callbacks when user switches options or questions
+  // Guards against stale onEnd / setTimeout callbacks when user switches options or questions
   const ttsActive = useRef(false);
 
   const q = questions[current];
   const targetText = selectedOption !== null ? q.a[selectedOption] : "";
   const isComplete = targetText.length > 0 && typedLength === targetText.length;
 
-  // The index of the next character the user must type (skip over any auto-filled spaces)
-  const currentCharIdx = (() => {
-    if (isComplete || selectedOption === null) return -1;
-    let i = typedLength;
-    while (i < targetText.length && targetText[i] === " ") i++;
-    return i < targetText.length ? i : -1;
-  })();
+  // Current char — every character including spaces must be typed
+  const currentCharIdx =
+    isComplete || selectedOption === null || typedLength >= targetText.length
+      ? -1
+      : typedLength;
 
-  // Read question aloud whenever it changes
+  // Read question + SHORT option labels when question changes or TTS is toggled on
   useEffect(() => {
     ttsActive.current = false;
-    if (ttsOn && q) speak(q.q);
+    stopSpeech();
+    if (ttsOn && q) {
+      const labelA = getLabel(q, 0);
+      const labelB = getLabel(q, 1);
+      ttsActive.current = true;
+      speak(q.q, () => {
+        if (!ttsActive.current) return;
+        speak(`Option A: ${labelA}`, () => {
+          if (!ttsActive.current) return;
+          speak(`Option B: ${labelB}`);
+        });
+      });
+    }
     return () => {
       ttsActive.current = false;
       stopSpeech();
     };
   }, [current, ttsOn]);
 
-  // Focus hidden input when an option is selected
+  // Focus hidden input and scroll typing area into view when an option is selected.
+  // 300ms delay before scrollIntoView lets the tablet keyboard finish opening first.
   useEffect(() => {
     if (selectedOption !== null) {
-      setTimeout(() => inputRef.current?.focus(), 50);
+      setTimeout(() => {
+        inputRef.current?.focus();
+        setTimeout(() => {
+          typingAreaRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        }, 300);
+      }, 50);
     }
   }, [selectedOption]);
 
@@ -69,7 +95,6 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
   function handleOptionSelect(idx) {
     if (wrongOptionIdx === idx) return;
 
-    // Cancel any in-flight TTS callbacks before resetting
     ttsActive.current = false;
     stopSpeech();
 
@@ -81,16 +106,16 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
     if (inputRef.current) inputRef.current.value = "";
 
     if (ttsOn) {
-      const answer = q.a[idx];
-      // Find the first character the user will need to type
-      let firstCharIdx = 0;
-      while (firstCharIdx < answer.length && answer[firstCharIdx] === " ") firstCharIdx++;
-
+      const label = getLabel(q, idx);
+      const fullAnswer = q.a[idx];
+      // Read the SHORT label aloud, then after 300 ms call out the first character to type
       ttsActive.current = true;
-      // Read the full answer, then call out the first letter
-      speak(answer, () => {
+      speak(label, () => {
         if (!ttsActive.current) return;
-        if (firstCharIdx < answer.length) speak(getCharLabel(answer[firstCharIdx]));
+        setTimeout(() => {
+          if (!ttsActive.current) return;
+          speak(getCharLabel(fullAnswer[0]));
+        }, 300);
       });
     }
   }
@@ -100,50 +125,48 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
     const val = e.target.value;
     if (!val) return;
 
-    const typedChar = val[val.length - 1]; // The character just entered
-    e.target.value = "";                   // Clear immediately; one char at a time
+    const typedChar = val[val.length - 1];
+    e.target.value = "";
 
     const answer = q.a[selectedOption];
+    const expectedIdx = typedLength;
 
-    // Skip past any spaces at the current position to find expected char
-    let expectedIdx = typedLength;
-    while (expectedIdx < answer.length && answer[expectedIdx] === " ") expectedIdx++;
     if (expectedIdx >= answer.length) return;
 
     if (typedChar.toLowerCase() === answer[expectedIdx].toLowerCase()) {
-      // ✓ Correct — advance past this char and auto-fill any following spaces
-      let newLen = expectedIdx + 1;
-      let crossedWordBoundary = false;
-      while (newLen < answer.length && answer[newLen] === " ") {
-        newLen++;
-        crossedWordBoundary = true;
-      }
+      const newLen = expectedIdx + 1;
 
-      // Cancel any pending TTS callbacks (e.g., the answer-reading onEnd)
       ttsActive.current = false;
 
-      if (newLen >= answer.length) {
-        // Typing is complete — submit button will appear; nothing more to announce
-      } else if (crossedWordBoundary) {
-        // Just finished a word — say the word, then call out the next letter
-        if (ttsOn) {
-          const prevSpace = answer.lastIndexOf(" ", expectedIdx - 1);
-          const word = answer.slice(prevSpace + 1, expectedIdx + 1);
-          ttsActive.current = true;
-          speak(word, () => {
-            if (!ttsActive.current) return;
-            speak(getCharLabel(answer[newLen]));
-          });
+      if (ttsOn) {
+        if (newLen >= answer.length) {
+          // Typing complete — nothing more to announce
+        } else {
+          const nextChar = answer[newLen];
+
+          if (nextChar === " ") {
+            // Just finished a word — read it, then after 300 ms say "space"
+            const wordStart = answer.lastIndexOf(" ", expectedIdx - 1) + 1;
+            const word = answer.slice(wordStart, expectedIdx + 1);
+            ttsActive.current = true;
+            speak(word, () => {
+              if (!ttsActive.current) return;
+              setTimeout(() => {
+                if (!ttsActive.current) return;
+                speak("space");
+              }, 300);
+            });
+          } else {
+            // Mid-word or just-typed a space — read next character
+            ttsActive.current = true;
+            speak(getCharLabel(nextChar));
+          }
         }
-      } else {
-        // Mid-word — call out the next letter to type
-        if (ttsOn) speak(getCharLabel(answer[newLen]));
       }
 
       setTypedLength(newLen);
       setWrongFlash(false);
     } else {
-      // ✗ Wrong character — flash red, don't advance
       flashWrong();
     }
   }
@@ -187,6 +210,7 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
 
   return (
     <div style={{ animation: "fadeUp 0.4s ease both" }}>
+      {/* Progress bar */}
       <div style={{ marginBottom: 20 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
           <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 3, textTransform: "uppercase", color: "#a09a90", fontFamily: "'Barlow Condensed', sans-serif" }}>
@@ -201,52 +225,158 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
         </div>
       </div>
 
-      <div style={{ fontSize: 18, fontWeight: 700, color: "#FAEBD7", lineHeight: 1.5, marginBottom: 20, fontFamily: "'Barlow Condensed', sans-serif" }}>
+      {/* Question text */}
+      <div style={{ fontSize: 22, fontWeight: 700, color: "#FAEBD7", lineHeight: 1.5, marginBottom: 20, fontFamily: "'Barlow Condensed', sans-serif" }}>
         {q.q}
       </div>
 
       {wrongAnswerMsg && (
         <div style={{ background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.35)", borderRadius: 12, padding: "12px 16px", marginBottom: 14, display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ fontSize: 20, lineHeight: 1 }}>✗</span>
-          <span style={{ fontSize: 14, color: "#f87171", fontWeight: 700, fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: 0.5 }}>
+          <span style={{ fontSize: 15, color: "#f87171", fontWeight: 700, fontFamily: "'Barlow Condensed', sans-serif" }}>
             Wrong answer — try the other option!
           </span>
         </div>
       )}
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
-        {q.a.map((answer, idx) => {
+      {/* A/B option buttons — show SHORT labels only */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 16 }}>
+        {q.a.map((_, idx) => {
+          const label = getLabel(q, idx);
           const isSelected = selectedOption === idx;
           const isWrongPrev = wrongOptionIdx === idx;
-          let bg = "rgba(255,255,255,0.04)", border = "rgba(255,255,255,0.08)", color = "#c8c0b4", cursor = "pointer";
-          if (isSelected) { bg = "rgba(240,192,64,0.1)"; border = "rgba(240,192,64,0.4)"; color = "#F0C040"; }
-          else if (isWrongPrev) { bg = "rgba(248,113,113,0.06)"; border = "rgba(248,113,113,0.2)"; color = "#f87171"; cursor = "default"; }
+          const letter = String.fromCharCode(65 + idx); // "A" or "B"
+
+          let cardBg = "rgba(255,255,255,0.04)";
+          let cardBorder = "rgba(255,255,255,0.1)";
+          let labelColor = "#c8c0b4";
+          let badgeBg = "rgba(255,255,255,0.08)";
+          let badgeColor = "#666";
+          let cursor = "pointer";
+
+          if (isSelected) {
+            cardBg = "rgba(240,192,64,0.08)";
+            cardBorder = "rgba(240,192,64,0.5)";
+            labelColor = "#F0C040";
+            badgeBg = "rgba(240,192,64,0.2)";
+            badgeColor = "#F0C040";
+          } else if (isWrongPrev) {
+            cardBg = "rgba(248,113,113,0.06)";
+            cardBorder = "rgba(248,113,113,0.2)";
+            labelColor = "#f87171";
+            badgeBg = "rgba(248,113,113,0.15)";
+            badgeColor = "#f87171";
+            cursor = "default";
+          }
+
           return (
-            <button key={idx} onClick={() => handleOptionSelect(idx)} disabled={isWrongPrev}
-              aria-label={`Option ${idx + 1}: ${answer}`}
-              style={{ background: bg, border: `1px solid ${border}`, borderRadius: 12, padding: "14px 16px", textAlign: "left", cursor, width: "100%", opacity: isWrongPrev ? 0.45 : 1, transition: "all 0.15s ease" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-                <p style={{ fontSize: 14, color, lineHeight: 1.6, flex: 1, margin: 0 }}>{answer}</p>
-                {isWrongPrev && <span style={{ fontSize: 11, fontWeight: 800, color: "#f87171", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: 1, whiteSpace: "nowrap", marginTop: 2 }}>Wrong</span>}
-                {isSelected && <span style={{ fontSize: 11, fontWeight: 800, color: "#F0C040", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: 1, whiteSpace: "nowrap", marginTop: 2 }}>Selected ↓</span>}
+            <button
+              key={idx}
+              onClick={() => handleOptionSelect(idx)}
+              disabled={isWrongPrev}
+              aria-label={`Option ${letter}: ${label}`}
+              style={{
+                background: cardBg,
+                border: `2px solid ${cardBorder}`,
+                borderRadius: 16,
+                padding: "16px 18px",
+                textAlign: "left",
+                cursor,
+                width: "100%",
+                opacity: isWrongPrev ? 0.5 : 1,
+                transition: "all 0.15s ease",
+                minHeight: 80,
+                touchAction: "manipulation",
+                display: "flex",
+                alignItems: "center",
+                gap: 16,
+              }}
+            >
+              {/* Prominent letter badge */}
+              <div style={{
+                width: 44,
+                height: 44,
+                borderRadius: "50%",
+                background: badgeBg,
+                border: `2px solid ${cardBorder}`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 20,
+                fontWeight: 900,
+                color: badgeColor,
+                fontFamily: "'Barlow Condensed', sans-serif",
+                flexShrink: 0,
+                transition: "all 0.15s ease",
+              }}>
+                {letter}
               </div>
+
+              {/* Short label text */}
+              <div style={{ flex: 1 }}>
+                <p style={{
+                  fontSize: 19,
+                  fontWeight: 700,
+                  color: labelColor,
+                  lineHeight: 1.35,
+                  margin: 0,
+                  fontFamily: "'Barlow Condensed', sans-serif",
+                  transition: "color 0.15s ease",
+                }}>
+                  {label}
+                </p>
+              </div>
+
+              {/* Status chip */}
+              {isWrongPrev && (
+                <span style={{ fontSize: 11, fontWeight: 800, color: "#f87171", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: 1, whiteSpace: "nowrap" }}>
+                  Wrong
+                </span>
+              )}
+              {isSelected && (
+                <span style={{ fontSize: 11, fontWeight: 800, color: "#F0C040", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: 1, whiteSpace: "nowrap" }}>
+                  Selected ↓
+                </span>
+              )}
             </button>
           );
         })}
       </div>
 
+      {/* Typing area — shown after option is selected, displays the FULL answer to type */}
       {selectedOption !== null && (
-        <div onClick={() => inputRef.current?.focus()}
+        <div
+          ref={typingAreaRef}
+          onClick={() => inputRef.current?.focus()}
           style={{
             background: wrongFlash ? "rgba(248,113,113,0.07)" : "rgba(255,255,255,0.04)",
             border: `1px solid ${wrongFlash ? "rgba(248,113,113,0.45)" : "rgba(255,255,255,0.1)"}`,
-            borderRadius: 12, padding: "14px 16px", marginBottom: 14, cursor: "text",
-            position: "relative", transition: "background 0.15s ease, border-color 0.15s ease",
-          }}>
+            borderRadius: 12,
+            padding: "14px 16px",
+            marginBottom: 14,
+            cursor: "text",
+            position: "relative",
+            transition: "background 0.15s ease, border-color 0.15s ease",
+            overflow: "hidden",
+            maxWidth: "100%",
+            touchAction: "manipulation",
+          }}
+        >
           <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 3, textTransform: "uppercase", color: "#a09a90", marginBottom: 10, fontFamily: "'Barlow Condensed', sans-serif" }}>
             Type the answer:
           </div>
-          <div style={{ fontSize: 17, fontWeight: 700, letterSpacing: 1.5, lineHeight: 2, fontFamily: "'Barlow Condensed', sans-serif", paddingRight: 32 }}>
+          {/* Full answer text — no letter-spacing, break-word so long answers wrap cleanly */}
+          <div style={{
+            fontSize: 16,
+            fontWeight: 700,
+            letterSpacing: 0,
+            lineHeight: 1.9,
+            fontFamily: "'Barlow Condensed', sans-serif",
+            wordBreak: "break-word",
+            overflowWrap: "break-word",
+            overflow: "hidden",
+            maxWidth: "100%",
+          }}>
             {targetText.split("").map((char, i) => {
               const typed = i < typedLength;
               const isCurrentChar = i === currentCharIdx;
@@ -257,29 +387,41 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
                   borderRadius: isCurrentChar ? "3px" : "0",
                   padding: "0 2px",
                   transition: "color 0.08s ease, background 0.08s ease",
-                }}>{char}</span>
+                }}>
+                  {char === " " ? "\u00A0" : char}
+                </span>
               );
             })}
             {isComplete && <span style={{ color: "#4ade80", marginLeft: 6, fontSize: 16 }}>✓</span>}
           </div>
           {wrongFlash && (
-            <div style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", color: "#f87171", fontSize: 24, fontWeight: 900, lineHeight: 1 }}>✗</div>
-          )}
-          {wrongFlash && (
-            <div style={{ fontSize: 10, fontWeight: 700, color: "#f87171", marginTop: 6, fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: 1 }}>
-              Wrong letter — try again
+            <div style={{ fontSize: 10, fontWeight: 700, color: "#f87171", marginTop: 8, fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: 1 }}>
+              ✗ Wrong letter — try again
             </div>
           )}
-          <input ref={inputRef} type="text" autoCapitalize="none" autoCorrect="off" autoComplete="off"
-            spellCheck="false" inputMode="text" onChange={handleInputChange} onKeyDown={handleKeyDown}
-            onPaste={handlePaste} aria-label="Type your answer here"
-            style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", opacity: 0, cursor: "text", fontSize: 16, border: "none", background: "transparent" }} />
+          <input
+            ref={inputRef}
+            type="text"
+            autoCapitalize="none"
+            autoCorrect="off"
+            autoComplete="off"
+            spellCheck="false"
+            inputMode="text"
+            onChange={handleInputChange}
+            onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
+            aria-label="Type your answer here"
+            style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", opacity: 0, cursor: "text", fontSize: 16, border: "none", background: "transparent" }}
+          />
         </div>
       )}
 
       {isComplete && (
-        <button onClick={handleSubmit} aria-label={current + 1 >= questions.length ? "See results" : "Submit answer"}
-          style={{ width: "100%", background: "linear-gradient(135deg,#E81828,#a01020)", border: "none", borderRadius: 12, padding: "14px", color: "#fff", fontSize: 15, fontWeight: 900, cursor: "pointer", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: 2, textTransform: "uppercase", animation: "fadeUp 0.25s ease both" }}>
+        <button
+          onClick={handleSubmit}
+          aria-label={current + 1 >= questions.length ? "See results" : "Submit answer"}
+          style={{ width: "100%", background: "linear-gradient(135deg,#E81828,#a01020)", border: "none", borderRadius: 12, padding: "14px", color: "#fff", fontSize: 18, fontWeight: 900, cursor: "pointer", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: 2, textTransform: "uppercase", animation: "fadeUp 0.25s ease both", minHeight: 64, touchAction: "manipulation" }}
+        >
           {current + 1 >= questions.length ? "See Results" : "Submit Answer →"}
         </button>
       )}

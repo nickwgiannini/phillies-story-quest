@@ -12,12 +12,17 @@
     <style>
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
       html, body, #root { height: 100%; }
+      /* Prevent keyboard from hiding content when scrolled into view on tablet */
+      html { scroll-padding-bottom: 320px; }
       body {
         background: #0a0f14;
         color: #e8e0d4;
         font-family: "Barlow", sans-serif;
         -webkit-font-smoothing: antialiased;
+        -webkit-overflow-scrolling: touch;
       }
+      /* Prevent double-tap zoom on all interactive elements */
+      button, [role="button"], input, select, textarea { touch-action: manipulation; }
       @keyframes fadeUp {
         from { opacity: 0; transform: translateY(16px); }
         to { opacity: 1; transform: translateY(0); }

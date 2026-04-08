@@ -79,12 +79,17 @@ async function parseGameEvent(game) {
 }
 
 async function generateContentFromBoxScore(gameId, boxScore, gameInfo) {
-  const cacheKey = `phillies_content_${gameId}`;
+  // v2: cache key bumped to force regeneration with the 'labels' field
+  const cacheKey = `phillies_content_v2_${gameId}`;
   try {
     const cached = localStorage.getItem(cacheKey);
     if (cached) {
       const parsed = JSON.parse(cached);
-      if (parsed.questions?.length > 0) return parsed;
+      // Only accept cache if questions exist AND all have proper short labels
+      const hasLabels = parsed.questions?.every(
+        (q) => Array.isArray(q.labels) && q.labels.length >= 2 && q.labels[0]?.split(" ").length <= 6
+      );
+      if (parsed.questions?.length > 0 && hasLabels) return parsed;
     }
   } catch {}
 
@@ -104,28 +109,53 @@ Return a single JSON object with this exact shape:
   "story": "2-3 sentence recap of the game",
   "questions": [
     {
-      "q": "Question text?",
+      "q": "What was the final score?",
       "a": [
-        "Correct answer — approximately 200 characters long...",
-        "Wrong but plausible answer — approximately 200 characters long..."
+        "The Phillies defeated the Nationals six to five in ten innings at Citizens Bank Park, rallying in the final frame to complete a dramatic comeback victory.",
+        "The Phillies lost to the Nationals five to six in nine innings, falling short despite a strong pitching performance from the starting rotation."
       ],
+      "labels": ["Phillies won 6-5", "Phillies lost 5-6"],
       "correct": 0
     }
   ]
 }
 
-Rules:
-- Generate exactly 10 questions based on real stats from the box score
-- Each answer (both correct AND incorrect) must be approximately 200 characters long
-- correct is always 0 (the correct answer is always a[0])
-- Questions must cover: final score, key hitters, pitcher performance, home runs, RBIs, innings pitched, winning/losing pitcher, notable plays
-- Return ONLY the raw JSON object — no markdown, no backticks, no extra text`;
+CRITICAL RULES — read carefully:
+1. The 'labels' field is the MOST IMPORTANT part of this response. Each label must be:
+   - EXACTLY 3 to 6 words — count them
+   - A bare fact, no articles like "the" unless needed
+   - Clearly different from the other label so a user can tell them apart at a glance
+   - NO ellipsis, NO truncation, NO trailing words
+
+   GOOD label examples (these are 3-6 words each):
+   - "Phillies won 6-5" / "Phillies lost 5-6"
+   - "Aaron Nola started" / "Zack Wheeler started"
+   - "Bryce Harper homered" / "Kyle Schwarber homered"
+   - "Game went 10 innings" / "Game ended in 9"
+   - "Luzardo pitched six innings" / "Luzardo pitched four innings"
+   - "Harper drove in three" / "Bohm drove in three"
+
+   BAD label examples (never do this):
+   - "The Phillies defeated the Nationals by..." ← too long, starts with "The"
+   - "Phillies won in a thrilling comeback victory" ← too long (7 words)
+   - "Phillies lost 5-6 in nine" ← ok but edge case, check word count
+
+2. The 'a' field answers must each be approximately 200 characters long — full sentences the user will type out letter by letter.
+
+3. correct is always 0 (a[0] and labels[0] are always the correct answer).
+
+4. Generate exactly 10 questions covering: final score, key hitters, pitcher performance, home runs, RBIs, innings pitched, winning/losing pitcher, notable plays.
+
+5. Return ONLY the raw JSON object — no markdown, no backticks, no extra text.`;
 
   try {
-    const res = await fetch("/api/claude", {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "x-api-key": import.meta.env.VITE_ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-5",
@@ -143,7 +173,7 @@ Rules:
     const cleaned = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
     const result = JSON.parse(cleaned);
     try {
-      localStorage.setItem(cacheKey, JSON.stringify(result));
+      localStorage.setItem(`phillies_content_v2_${gameId}`, JSON.stringify(result));
     } catch {}
     return result;
   } catch (err) {

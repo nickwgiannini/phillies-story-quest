@@ -20,11 +20,11 @@ export default function StoryScreen({ story, ttsOn, onStartQuiz, loading }) {
             <div style={{ fontSize: 13, color: "#a09a90", marginTop: 10, fontWeight: 600 }}>Generating recap...</div>
           </div>
         ) : (
-          <p style={{ fontSize: 16, lineHeight: 1.75, color: "#c8c0b4", fontStyle: "italic", margin: 0 }}>"{story}"</p>
+          <p style={{ fontSize: 20, lineHeight: 1.75, color: "#c8c0b4", fontStyle: "italic", margin: 0 }}>"{story}"</p>
         )}
       </div>
       {!loading && (
-        <button onClick={onStartQuiz} aria-label="Start the quiz" style={{ width: "100%", background: "linear-gradient(135deg,#E81828,#a01020)", border: "none", borderRadius: 14, padding: "16px 24px", color: "#fff", fontSize: 16, fontWeight: 900, cursor: "pointer", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: 2, textTransform: "uppercase", boxShadow: "0 4px 24px rgba(232,24,40,0.3)" }}>
+        <button onClick={onStartQuiz} aria-label="Start the quiz" style={{ width: "100%", background: "linear-gradient(135deg,#E81828,#a01020)", border: "none", borderRadius: 14, padding: "16px 24px", color: "#fff", fontSize: 22, fontWeight: 900, cursor: "pointer", fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: 2, textTransform: "uppercase", boxShadow: "0 4px 24px rgba(232,24,40,0.3)", minHeight: 64, touchAction: "manipulation" }}>
           Take the Quiz
         </button>
       )}

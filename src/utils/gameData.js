@@ -149,20 +149,18 @@ CRITICAL RULES — read carefully:
 5. Return ONLY the raw JSON object — no markdown, no backticks, no extra text.`;
 
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await fetch("/api/claude", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": import.meta.env.VITE_ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         model: "claude-sonnet-4-5",
         max_tokens: 4000,
         messages: [{ role: "user", content: prompt }],
       }),
     });
+    if (res.status === 429) {
+      throw new Error("RATE_LIMITED");
+    }
     const data = await res.json();
     if (!res.ok) {
       console.error("Claude API error:", res.status, data);
@@ -178,6 +176,9 @@ CRITICAL RULES — read carefully:
     return result;
   } catch (err) {
     console.error("AI content generation failed:", err);
+    if (err.message === "RATE_LIMITED") {
+      return { story: "Too many requests — please try again later.", questions: [], rateLimited: true };
+    }
     return { story: "Questions loading...", questions: [] };
   }
 }

@@ -22,7 +22,7 @@
         -webkit-overflow-scrolling: touch;
       }
       /* Prevent double-tap zoom on all interactive elements */
-      button, [role="button"], input, select, textarea { touch-action: manipulation; }
+      button, [role="button"], input, select, textarea, a { touch-action: manipulation; }
       @keyframes fadeUp {
         from { opacity: 0; transform: translateY(16px); }
         to { opacity: 1; transform: translateY(0); }
@@ -30,6 +30,20 @@
       @keyframes pulse {
         0%, 100% { opacity: 0.3; transform: scale(0.8); }
         50% { opacity: 1; transform: scale(1); }
+      }
+      @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        25% { transform: translateX(-8px); }
+        75% { transform: translateX(8px); }
+      }
+      @keyframes correctFlash {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.3); }
+        100% { transform: scale(1); }
+      }
+      @keyframes speakPulse {
+        0%, 100% { opacity: 0.4; transform: scale(0.9); }
+        50% { opacity: 1; transform: scale(1.1); }
       }
       ::-webkit-scrollbar { width: 4px; }
       ::-webkit-scrollbar-track { background: transparent; }

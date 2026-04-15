@@ -149,9 +149,17 @@ CRITICAL RULES — read carefully:
 5. Return ONLY the raw JSON object — no markdown, no backticks, no extra text.`;
 
   try {
-    const res = await fetch("/api/claude", {
+    const isDev = import.meta.env.DEV;
+    const res = await fetch(isDev ? "https://api.anthropic.com/v1/messages" : "/api/claude", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(isDev && {
+          "x-api-key": import.meta.env.VITE_ANTHROPIC_API_KEY,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true",
+        }),
+      },
       body: JSON.stringify({
         model: "claude-sonnet-4-5",
         max_tokens: 4000,

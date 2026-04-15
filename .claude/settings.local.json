@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(ls C:/Users/nicho/documents/phillies-story-quest/.env*)"
+      "Bash(ls C:/Users/nicho/documents/phillies-story-quest/.env*)",
+      "Bash(npm run *)"
     ]
   }
 }

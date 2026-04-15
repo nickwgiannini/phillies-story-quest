@@ -7,7 +7,7 @@ function Btn({ onClick, bg, border, color, children, ariaLabel }) {
       background: bg, border: `1px solid ${border}`, borderRadius: 99,
       padding: "12px 20px", color, fontSize: 14, fontWeight: 700, cursor: "pointer",
       fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: 0.5,
-      minHeight: 48, touchAction: "manipulation", display: "flex", alignItems: "center",
+      minHeight: 52, touchAction: "manipulation", display: "flex", alignItems: "center",
     }}>
       {children}
     </button>

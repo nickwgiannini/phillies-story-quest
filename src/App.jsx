@@ -27,6 +27,24 @@ export default function App() {
   const dbRef = useRef(db);
   useEffect(() => { dbRef.current = db; }, [db]);
 
+  // Unlock Web Speech API on first user interaction (browsers block autoplay until then)
+  useEffect(() => {
+    const unlockAudio = () => {
+      if (window.speechSynthesis) {
+        const utt = new SpeechSynthesisUtterance('');
+        window.speechSynthesis.speak(utt);
+      }
+      document.removeEventListener('touchstart', unlockAudio);
+      document.removeEventListener('click', unlockAudio);
+    };
+    document.addEventListener('touchstart', unlockAudio);
+    document.addEventListener('click', unlockAudio);
+    return () => {
+      document.removeEventListener('touchstart', unlockAudio);
+      document.removeEventListener('click', unlockAudio);
+    };
+  }, []);
+
   useEffect(() => { loadGame(); }, []);
 
   useEffect(() => {

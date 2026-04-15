@@ -16,7 +16,6 @@ function getCharLabel(char) {
 }
 
 // Graceful fallback for questions cached before the 'labels' field was added.
-// Returns the letter name rather than ever truncating the long-form answer text.
 function getLabel(q, idx) {
   const label = q.labels?.[idx];
   if (label && label.trim().length > 0) return label;
@@ -32,10 +31,16 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
   const [firstAttemptWrong, setFirstAttemptWrong] = useState(false);
   const [wrongAnswerMsg, setWrongAnswerMsg] = useState(false);
   const [wrongOptionIdx, setWrongOptionIdx] = useState(null);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const [lastCorrectIdx, setLastCorrectIdx] = useState(-1);
+  const [shakingIdx, setShakingIdx] = useState(null);
 
   const inputRef = useRef(null);
   const typingAreaRef = useRef(null);
   const wrongFlashTimer = useRef(null);
+  const lastCorrectTimer = useRef(null);
+  const shakingTimer = useRef(null);
   // Guards against stale onEnd / setTimeout callbacks when user switches options or questions
   const ttsActive = useRef(false);
 
@@ -53,38 +58,45 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
   useEffect(() => {
     ttsActive.current = false;
     stopSpeech();
+    setIsSpeaking(false);
     if (ttsOn && q) {
       const labelA = getLabel(q, 0);
       const labelB = getLabel(q, 1);
       ttsActive.current = true;
+      setIsSpeaking(true);
       speak(q.q, () => {
-        if (!ttsActive.current) return;
+        if (!ttsActive.current) { setIsSpeaking(false); return; }
         speak(`Option A: ${labelA}`, () => {
-          if (!ttsActive.current) return;
-          speak(`Option B: ${labelB}`);
+          if (!ttsActive.current) { setIsSpeaking(false); return; }
+          speak(`Option B: ${labelB}`, () => {
+            setIsSpeaking(false);
+          });
         });
       });
     }
     return () => {
       ttsActive.current = false;
       stopSpeech();
+      setIsSpeaking(false);
     };
   }, [current, ttsOn]);
 
-  // Focus hidden input and scroll typing area into view when an option is selected.
-  // 300ms delay before scrollIntoView lets the tablet keyboard finish opening first.
+  // Scroll typing area into view after option selection.
+  // 350ms delay lets the tablet keyboard finish opening before scrolling.
   useEffect(() => {
     if (selectedOption !== null) {
       setTimeout(() => {
+        typingAreaRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
         inputRef.current?.focus();
-        setTimeout(() => {
-          typingAreaRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-        }, 300);
-      }, 50);
+      }, 350);
     }
   }, [selectedOption]);
 
-  useEffect(() => () => clearTimeout(wrongFlashTimer.current), []);
+  useEffect(() => () => {
+    clearTimeout(wrongFlashTimer.current);
+    clearTimeout(lastCorrectTimer.current);
+    clearTimeout(shakingTimer.current);
+  }, []);
 
   function flashWrong() {
     setWrongFlash(true);
@@ -97,6 +109,7 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
 
     ttsActive.current = false;
     stopSpeech();
+    setIsSpeaking(false);
 
     setSelectedOption(idx);
     setTypedLength(0);
@@ -135,6 +148,11 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
 
     if (typedChar.toLowerCase() === answer[expectedIdx].toLowerCase()) {
       const newLen = expectedIdx + 1;
+
+      // Brief green flash animation on the just-typed character
+      setLastCorrectIdx(expectedIdx);
+      clearTimeout(lastCorrectTimer.current);
+      lastCorrectTimer.current = setTimeout(() => setLastCorrectIdx((prev) => prev === expectedIdx ? -1 : prev), 200);
 
       ttsActive.current = false;
 
@@ -181,24 +199,51 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
     const isCorrect = selectedOption === q.correct;
     if (isCorrect) {
       ttsActive.current = false;
+      setIsSpeaking(false);
       const newAnswer = { correct: !firstAttemptWrong };
       const newAnswers = [...answers, newAnswer];
       setAnswers(newAnswers);
       stopSpeech();
-      if (ttsOn) speak(firstAttemptWrong ? "Got it." : "Correct!");
-      if (current + 1 >= questions.length) {
-        onFinish(newAnswers);
+
+      function advanceQuestion() {
+        setTimeout(() => {
+          if (current + 1 >= questions.length) {
+            onFinish(newAnswers);
+          } else {
+            setCurrent((c) => c + 1);
+            setSelectedOption(null); setTypedLength(0); setWrongFlash(false);
+            setFirstAttemptWrong(false); setWrongAnswerMsg(false); setWrongOptionIdx(null);
+            clearTimeout(wrongFlashTimer.current);
+            if (inputRef.current) inputRef.current.value = "";
+          }
+        }, 500);
+      }
+
+      if (ttsOn) {
+        setIsSpeaking(true);
+        speak(firstAttemptWrong ? "Got it." : "Correct!", () => {
+          setIsSpeaking(false);
+          advanceQuestion();
+        });
       } else {
-        setCurrent((c) => c + 1);
-        setSelectedOption(null); setTypedLength(0); setWrongFlash(false);
-        setFirstAttemptWrong(false); setWrongAnswerMsg(false); setWrongOptionIdx(null);
-        clearTimeout(wrongFlashTimer.current);
-        if (inputRef.current) inputRef.current.value = "";
+        advanceQuestion();
       }
     } else {
       ttsActive.current = false;
+      setIsSpeaking(false);
       stopSpeech();
-      if (ttsOn) speak("Not quite. Try the other answer.");
+
+      // Shake animation on the wrong button
+      const wrongIdx = selectedOption;
+      setShakingIdx(wrongIdx);
+      clearTimeout(shakingTimer.current);
+      shakingTimer.current = setTimeout(() => setShakingIdx(null), 400);
+
+      if (ttsOn) {
+        setIsSpeaking(true);
+        speak("Not quite, try the other option", () => setIsSpeaking(false));
+      }
+
       setFirstAttemptWrong(true); setWrongAnswerMsg(true); setWrongOptionIdx(selectedOption);
       setSelectedOption(null); setTypedLength(0); setWrongFlash(false);
       clearTimeout(wrongFlashTimer.current);
@@ -209,15 +254,16 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
   const progress = (current / questions.length) * 100;
 
   return (
-    <div style={{ animation: "fadeUp 0.4s ease both" }}>
+    <div style={{ animation: "fadeUp 0.4s ease both", paddingBottom: keyboardOpen ? "40vh" : 0, transition: "padding-bottom 0.3s ease" }}>
       {/* Progress bar */}
       <div style={{ marginBottom: 20 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
           <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 3, textTransform: "uppercase", color: "#a09a90", fontFamily: "'Barlow Condensed', sans-serif" }}>
             Question {current + 1} of {questions.length}
           </span>
-          <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 2, color: "#E81828", fontFamily: "'Barlow Condensed', sans-serif" }}>
+          <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 2, color: "#E81828", fontFamily: "'Barlow Condensed', sans-serif", display: "flex", alignItems: "center", gap: 6 }}>
             {answers.filter((a) => a.correct).length} correct
+            {isSpeaking && <span style={{ display: "inline-block", animation: "speakPulse 1s ease infinite", fontSize: 12 }}>🔊</span>}
           </span>
         </div>
         <div style={{ background: "rgba(255,255,255,0.06)", borderRadius: 99, height: 4, overflow: "hidden" }}>
@@ -245,6 +291,7 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
           const label = getLabel(q, idx);
           const isSelected = selectedOption === idx;
           const isWrongPrev = wrongOptionIdx === idx;
+          const isShaking = shakingIdx === idx;
           const letter = String.fromCharCode(65 + idx); // "A" or "B"
 
           let cardBg = "rgba(255,255,255,0.04)";
@@ -285,11 +332,12 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
                 width: "100%",
                 opacity: isWrongPrev ? 0.5 : 1,
                 transition: "all 0.15s ease",
-                minHeight: 80,
+                minHeight: 88,
                 touchAction: "manipulation",
                 display: "flex",
                 alignItems: "center",
                 gap: 16,
+                animation: isShaking ? "shake 0.3s ease" : undefined,
               }}
             >
               {/* Prominent letter badge */}
@@ -380,13 +428,16 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
             {targetText.split("").map((char, i) => {
               const typed = i < typedLength;
               const isCurrentChar = i === currentCharIdx;
+              const isJustTyped = i === lastCorrectIdx;
               return (
                 <span key={i} style={{
                   color: typed ? "#4ade80" : isCurrentChar ? "#000" : "#444",
                   background: isCurrentChar ? "#F0C040" : "transparent",
                   borderRadius: isCurrentChar ? "3px" : "0",
                   padding: "0 2px",
+                  display: "inline-block",
                   transition: "color 0.08s ease, background 0.08s ease",
+                  animation: isJustTyped ? "correctFlash 0.15s ease" : undefined,
                 }}>
                   {char === " " ? "\u00A0" : char}
                 </span>
@@ -402,14 +453,17 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
           <input
             ref={inputRef}
             type="text"
-            autoCapitalize="none"
+            autoCapitalize="off"
             autoCorrect="off"
             autoComplete="off"
-            spellCheck="false"
+            spellCheck={false}
             inputMode="text"
+            data-form-type="other"
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
+            onFocus={() => setKeyboardOpen(true)}
+            onBlur={() => setKeyboardOpen(false)}
             aria-label="Type your answer here"
             style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", opacity: 0, cursor: "text", fontSize: 16, border: "none", background: "transparent" }}
           />

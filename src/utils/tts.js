@@ -1,4 +1,4 @@
-export function speak(text, onEnd) {
+export function speak(text, onEnd, onStart) {
   stopSpeech();
   if (!window.speechSynthesis) return;
   const utterance = new SpeechSynthesisUtterance(text);
@@ -10,6 +10,7 @@ export function speak(text, onEnd) {
     (v) => v.name.includes("Google US English") || v.name.includes("Samantha") || v.lang === "en-US"
   );
   if (preferred) utterance.voice = preferred;
+  if (onStart) utterance.onstart = onStart;
   if (onEnd) utterance.onend = onEnd;
   window.speechSynthesis.speak(utterance);
 }

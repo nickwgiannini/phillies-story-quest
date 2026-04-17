@@ -5,6 +5,10 @@ const ALLOWED_ORIGINS = [
   "https://phillies-story-quest.vercel.app",
   "http://localhost:5173",
   "http://localhost:5174",
+  "capacitor://localhost",
+  "ionic://localhost",
+  "http://localhost",
+  "https://localhost",
 ];
 
 // In-memory rate limiter. Vercel warm instances share this map across

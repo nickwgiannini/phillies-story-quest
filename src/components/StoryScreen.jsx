@@ -29,7 +29,7 @@ export default function StoryScreen({ story, ttsOn, onStartQuiz, loading }) {
       <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 4, textTransform: "uppercase", color: "#E81828", marginBottom: 14, fontFamily: "'Barlow Condensed', sans-serif", display: "flex", alignItems: "center", gap: 8 }}>
         Game Recap
         {isSpeaking && (
-          <span style={{ fontSize: 14, display: "inline-block", animation: "speakPulse 1s ease infinite" }}>🔊</span>
+          <span role="img" aria-label="Speaking" style={{ fontSize: 14, display: "inline-block", animation: "speakPulse 1s ease infinite" }}>🔊</span>
         )}
       </div>
       <div style={{

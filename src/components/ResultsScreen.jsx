@@ -18,7 +18,7 @@ export default function ResultsScreen({ answers, questions, ttsOn, onPlayAgain, 
   return (
     <div style={{ animation: "fadeUp 0.5s ease both" }}>
       <div style={{ background: "linear-gradient(135deg,rgba(232,24,40,0.1),rgba(0,45,98,0.15))", border: "1px solid rgba(232,24,40,0.2)", borderRadius: 20, padding: "32px 24px", textAlign: "center", marginBottom: 20 }}>
-        <div style={{ fontSize: 56, marginBottom: 8 }}>{grade.emoji}</div>
+        <div aria-hidden="true" style={{ fontSize: 56, marginBottom: 8 }}>{grade.emoji}</div>
         <div style={{ fontSize: 72, fontWeight: 900, color: grade.color, lineHeight: 1, fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: -1 }}>{score}%</div>
         <div style={{ fontSize: 13, fontWeight: 800, letterSpacing: 3, textTransform: "uppercase", color: grade.color, fontFamily: "'Barlow Condensed', sans-serif", marginTop: 6, marginBottom: 4 }}>{grade.label}</div>
         <div style={{ fontSize: 14, color: "#a09a90", fontWeight: 500 }}>{correct} / {total} correct</div>
@@ -28,7 +28,7 @@ export default function ResultsScreen({ answers, questions, ttsOn, onPlayAgain, 
       <div style={{ maxHeight: "40vh", overflowY: "auto", WebkitOverflowScrolling: "touch", display: "flex", flexDirection: "column", gap: 8, marginBottom: 24 }}>
         {answers.map((a, i) => (
           <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 12, background: a.correct ? "rgba(74,222,128,0.05)" : "rgba(248,113,113,0.05)", border: `1px solid ${a.correct ? "rgba(74,222,128,0.15)" : "rgba(248,113,113,0.15)"}`, borderRadius: 10, padding: "10px 14px" }}>
-            <span style={{ fontSize: 14, marginTop: 1 }}>{a.correct ? "✅" : "❌"}</span>
+            <span role="img" aria-label={a.correct ? "Correct" : "Wrong"} style={{ fontSize: 14, marginTop: 1 }}>{a.correct ? "✅" : "❌"}</span>
             <span style={{ fontSize: 13, color: "#c8c0b4", lineHeight: 1.5, flex: 1 }}>{questions[i]?.q}</span>
           </div>
         ))}

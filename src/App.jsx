@@ -128,7 +128,7 @@ export default function App() {
     return (
       <div style={outer}>
         <div style={{ ...inner, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh" }}>
-          <span style={{ fontSize: 48, marginBottom: 16 }}>⚾</span>
+          <span aria-hidden="true" style={{ fontSize: 48, marginBottom: 16 }}>⚾</span>
           <LoadingDots />
           <div style={{ fontSize: 13, color: "#a09a90", marginTop: 12, fontWeight: 600 }}>{error ? "Error: " + error : "Loading latest Phillies game..."}</div>
           {error && <button onClick={() => loadGame()} style={{ marginTop: 16, background: "rgba(232,24,40,0.15)", border: "1px solid rgba(232,24,40,0.3)", borderRadius: 10, padding: "10px 20px", color: "#E81828", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Retry</button>}
@@ -151,7 +151,7 @@ export default function App() {
         {screen === SCREENS.QUIZ && content?.questions?.length > 0 && <QuizScreen questions={content.questions} ttsOn={ttsOn} onFinish={handleQuizFinish} />}
         {screen === SCREENS.QUIZ && !(content?.questions?.length > 0) && (
           <div style={{ textAlign: "center", padding: "40px 20px" }}>
-            <div style={{ fontSize: 40, marginBottom: 12 }}>⚾</div>
+            <div aria-hidden="true" style={{ fontSize: 40, marginBottom: 12 }}>⚾</div>
             <div style={{ color: "#f87171", fontWeight: 700, fontSize: 15, marginBottom: 16, fontFamily: "'Barlow Condensed', sans-serif" }}>Quiz not available yet — check back soon!</div>
             <button onClick={() => setScreen(SCREENS.STORY)} style={{ background: "rgba(232,24,40,0.15)", border: "1px solid rgba(232,24,40,0.3)", borderRadius: 10, padding: "10px 20px", color: "#E81828", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Back to Story</button>
           </div>

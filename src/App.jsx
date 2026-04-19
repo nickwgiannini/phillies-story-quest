@@ -60,7 +60,7 @@ export default function App() {
         // Clear localStorage cache so generateContentFromBoxScore re-generates
         try {
           const currentDb = dbRef.current;
-          if (currentDb.lastGameId) localStorage.removeItem(`phillies_content_v2_${currentDb.lastGameId}`);
+          if (currentDb.lastGameId) localStorage.removeItem(`phillies_content_v3_${currentDb.lastGameId}`);
         } catch {}
       }
       const latestGame = await fetchLatestPhilliesGame();

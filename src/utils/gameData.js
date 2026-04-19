@@ -79,8 +79,8 @@ async function parseGameEvent(game) {
 }
 
 async function generateContentFromBoxScore(gameId, boxScore, gameInfo) {
-  // v2: cache key bumped to force regeneration with the 'labels' field
-  const cacheKey = `phillies_content_v2_${gameId}`;
+  // v3: cache key bumped to force regeneration after prompt update banning "nil"
+  const cacheKey = `phillies_content_v3_${gameId}`;
   try {
     const cached = localStorage.getItem(cacheKey);
     if (cached) {
@@ -179,7 +179,7 @@ CRITICAL RULES — read carefully:
     const cleaned = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
     const result = JSON.parse(cleaned);
     try {
-      localStorage.setItem(`phillies_content_v2_${gameId}`, JSON.stringify(result));
+      localStorage.setItem(`phillies_content_v3_${gameId}`, JSON.stringify(result));
     } catch {}
     return result;
   } catch (err) {

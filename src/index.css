@@ -8,3 +8,8 @@ body {
 button, input, a {
   touch-action: manipulation;
 }
+
+:focus-visible {
+  outline: 2px solid #F0C040;
+  outline-offset: 2px;
+}

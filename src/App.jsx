@@ -139,7 +139,8 @@ export default function App() {
 
   return (
     <div style={outer}>
-      <div style={inner}>
+      <a href="#main-content" className="skip-link">Skip to main content</a>
+      <div style={inner} id="main-content" tabIndex={-1}>
         <TopBar ttsOn={ttsOn} setTtsOn={setTtsOn} overallAvg={overallAvg} onHistory={() => { stopSpeech(); setScreen(SCREENS.HISTORY); }} notifStatus={notifStatus} onEnableNotifs={handleEnableNotifs} />
         {/* Sticky wrapper gives the score banner a solid background so it covers scrolled content */}
         {game && (

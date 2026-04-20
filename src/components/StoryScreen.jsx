@@ -1,28 +1,49 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { speak, stopSpeech } from "../utils/tts.js";
 import LoadingDots from "./LoadingDots.jsx";
 
-export default function StoryScreen({ story, ttsOn, onStartQuiz, loading }) {
+export default function StoryScreen({ story, ttsOn, audioUnlocked, onUnlockAudio, onStartQuiz, loading }) {
   const [isSpeaking, setIsSpeaking] = useState(false);
+  // Tracks the story string we have already started speaking, so a re-render
+  // with identical content does not cancel and restart speech.
+  const lastSpokenRef = useRef(null);
 
   useEffect(() => {
-    if (ttsOn && story && !loading) {
-      setIsSpeaking(true);
-      speak(story, () => setIsSpeaking(false));
-    } else {
+    const canSpeak = ttsOn && story && !loading && audioUnlocked;
+
+    if (!canSpeak) {
+      if (lastSpokenRef.current) {
+        stopSpeech();
+        lastSpokenRef.current = null;
+      }
       setIsSpeaking(false);
+      return;
     }
-    return () => {
-      stopSpeech();
-      setIsSpeaking(false);
-    };
-  }, [story, ttsOn, loading]);
+
+    if (lastSpokenRef.current === story) return;
+
+    lastSpokenRef.current = story;
+    setIsSpeaking(true);
+    speak(story, () => setIsSpeaking(false));
+  }, [story, ttsOn, loading, audioUnlocked]);
+
+  // Stop any in-flight speech on unmount only.
+  useEffect(() => () => {
+    stopSpeech();
+    lastSpokenRef.current = null;
+  }, []);
 
   function handleStartQuiz() {
     stopSpeech();
     setIsSpeaking(false);
     onStartQuiz();
   }
+
+  function handleTapToStart() {
+    if (onUnlockAudio) onUnlockAudio();
+  }
+
+  const showUnlockHint = ttsOn && story && !loading && !audioUnlocked;
 
   return (
     <div style={{ animation: "fadeUp 0.5s ease both" }}>
@@ -53,6 +74,30 @@ export default function StoryScreen({ story, ttsOn, onStartQuiz, loading }) {
           <p style={{ fontSize: 24, lineHeight: 1.75, color: "#c8c0b4", fontStyle: "italic", margin: 0 }}>"{story}"</p>
         )}
       </div>
+      {showUnlockHint && (
+        <button
+          onClick={handleTapToStart}
+          aria-label="Tap to start audio narration"
+          style={{
+            width: "100%",
+            background: "rgba(240,192,64,0.08)",
+            border: "1px solid rgba(240,192,64,0.35)",
+            borderRadius: 12,
+            padding: "10px 14px",
+            color: "#F0C040",
+            fontSize: 12,
+            fontWeight: 700,
+            cursor: "pointer",
+            fontFamily: "'Barlow Condensed', sans-serif",
+            letterSpacing: 2,
+            textTransform: "uppercase",
+            marginBottom: 14,
+            touchAction: "manipulation",
+          }}
+        >
+          🔊 Tap to start audio
+        </button>
+      )}
       {!loading && (
         <button
           onClick={handleStartQuiz}

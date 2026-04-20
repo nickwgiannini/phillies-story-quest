@@ -21,29 +21,39 @@ export default function App() {
   const [content, setContent] = useState(null);
   const [answers, setAnswers] = useState([]);
   const [ttsOn, setTtsOn] = useState(true);
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
   const [notifStatus, setNotifStatus] = useState(() => (typeof Notification !== "undefined" ? Notification.permission : "unsupported"));
   const [error, setError] = useState(null);
   const pollRef = useRef(null);
   const dbRef = useRef(db);
   useEffect(() => { dbRef.current = db; }, [db]);
 
-  // Unlock Web Speech API on first user interaction (browsers block autoplay until then)
-  useEffect(() => {
-    const unlockAudio = () => {
-      if (window.speechSynthesis) {
-        const utt = new SpeechSynthesisUtterance('');
+  // Unlock Web Speech API on first user interaction (browsers block autoplay until then).
+  // StoryScreen waits for audioUnlocked before starting narration, and shows a
+  // tap-to-start hint if it hasn't happened yet.
+  const unlockAudio = React.useCallback(() => {
+    if (window.speechSynthesis) {
+      try {
+        const utt = new SpeechSynthesisUtterance("");
+        utt.volume = 0;
         window.speechSynthesis.speak(utt);
-      }
-      document.removeEventListener('touchstart', unlockAudio);
-      document.removeEventListener('click', unlockAudio);
-    };
-    document.addEventListener('touchstart', unlockAudio);
-    document.addEventListener('click', unlockAudio);
-    return () => {
-      document.removeEventListener('touchstart', unlockAudio);
-      document.removeEventListener('click', unlockAudio);
-    };
+      } catch {}
+    }
+    setAudioUnlocked(true);
   }, []);
+
+  useEffect(() => {
+    if (audioUnlocked) return;
+    const handler = () => unlockAudio();
+    document.addEventListener("touchstart", handler, { once: true, passive: true });
+    document.addEventListener("click", handler, { once: true });
+    document.addEventListener("keydown", handler, { once: true });
+    return () => {
+      document.removeEventListener("touchstart", handler);
+      document.removeEventListener("click", handler);
+      document.removeEventListener("keydown", handler);
+    };
+  }, [audioUnlocked, unlockAudio]);
 
   useEffect(() => { loadGame(); }, []);
 
@@ -148,7 +158,7 @@ export default function App() {
             <GameHeader game={game} />
           </div>
         )}
-        {screen === SCREENS.STORY && <StoryScreen story={content?.story} ttsOn={ttsOn} onStartQuiz={() => { stopSpeech(); setScreen(SCREENS.QUIZ); }} />}
+        {screen === SCREENS.STORY && <StoryScreen story={content?.story} ttsOn={ttsOn} audioUnlocked={audioUnlocked} onUnlockAudio={unlockAudio} onStartQuiz={() => { stopSpeech(); setScreen(SCREENS.QUIZ); }} />}
         {screen === SCREENS.QUIZ && content?.questions?.length > 0 && <QuizScreen questions={content.questions} ttsOn={ttsOn} onFinish={handleQuizFinish} />}
         {screen === SCREENS.QUIZ && !(content?.questions?.length > 0) && (
           <div style={{ textAlign: "center", padding: "40px 20px" }}>

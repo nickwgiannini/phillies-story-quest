@@ -1,6 +1,6 @@
 ﻿import React, { useState, useEffect, useRef } from "react";
 import { loadDB, saveDB } from "./utils/storage.js";
-import { fetchLatestPhilliesGame } from "./utils/gameData.js";
+import { fetchLatestPhilliesGame, buildContentCacheKey } from "./utils/gameData.js";
 import { requestNotificationPermission, sendLocalNotification } from "./utils/notifications.js";
 import { stopSpeech } from "./utils/tts.js";
 import TopBar from "./components/TopBar.jsx";
@@ -70,7 +70,7 @@ export default function App() {
         // Clear localStorage cache so generateContentFromBoxScore re-generates
         try {
           const currentDb = dbRef.current;
-          if (currentDb.lastGameId) localStorage.removeItem(`phillies_content_v3_${currentDb.lastGameId}`);
+          if (currentDb.lastGameId) localStorage.removeItem(buildContentCacheKey(currentDb.lastGameId));
         } catch {}
       }
       const latestGame = await fetchLatestPhilliesGame();

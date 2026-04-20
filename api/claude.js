@@ -40,6 +40,9 @@ export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", origin);
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  // Each request is for a unique gameId/prompt and is non-idempotent from the
+  // client's POV — never let WebView/intermediary caches reuse a response.
+  res.setHeader("Cache-Control", "no-store");
 
   // Handle CORS preflight
   if (req.method === "OPTIONS") {

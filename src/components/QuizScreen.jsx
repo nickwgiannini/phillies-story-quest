@@ -1,5 +1,14 @@
 import React, { useState, useEffect, useRef } from "react";
+import { Capacitor } from "@capacitor/core";
+import { Keyboard } from "@capacitor/keyboard";
 import { speak, stopSpeech } from "../utils/tts.js";
+
+// Suppress iOS long-press context menus (define/share) and accent pickers on non-input elements.
+const noCallout = {
+  WebkitTouchCallout: "none",
+  WebkitUserSelect: "none",
+  userSelect: "none",
+};
 
 // Map characters to spoken labels; spaces explicitly announced
 function getCharLabel(char) {
@@ -32,7 +41,7 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
   const [wrongAnswerMsg, setWrongAnswerMsg] = useState(false);
   const [wrongOptionIdx, setWrongOptionIdx] = useState(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [lastCorrectIdx, setLastCorrectIdx] = useState(-1);
   const [shakingIdx, setShakingIdx] = useState(null);
 
@@ -81,16 +90,63 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
     };
   }, [current, ttsOn]);
 
-  // Scroll typing area into view after option selection.
-  // 350ms delay lets the tablet keyboard finish opening before scrolling.
+  // Focus the hidden input after option selection. Keyboard event listeners (below)
+  // handle scrolling once we know the real keyboard height.
   useEffect(() => {
     if (selectedOption !== null) {
-      setTimeout(() => {
-        typingAreaRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      const t = setTimeout(() => {
         inputRef.current?.focus();
-      }, 350);
+        // If keyboard is already open (e.g., switching options), event won't re-fire — scroll now.
+        if (keyboardHeight > 0) {
+          scrollTypingAreaIntoView(keyboardHeight);
+        }
+      }, 100);
+      return () => clearTimeout(t);
     }
-  }, [selectedOption]);
+  }, [selectedOption]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Scroll so the typing area's bottom sits above the keyboard with a small gap.
+  function scrollTypingAreaIntoView(height) {
+    const el = typingAreaRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const visibleBottom = window.innerHeight - height;
+    const gap = 24;
+    if (rect.bottom > visibleBottom - gap) {
+      window.scrollBy({ top: rect.bottom - visibleBottom + gap, behavior: "smooth" });
+    } else if (rect.top < 0) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }
+
+  // Track real keyboard height via Capacitor plugin (native) or visualViewport (web).
+  // This replaces the prior 350ms-guess scroll and the 40vh paddingBottom guess.
+  useEffect(() => {
+    const onShow = (height) => {
+      setKeyboardHeight(height);
+      requestAnimationFrame(() => scrollTypingAreaIntoView(height));
+    };
+    const onHide = () => setKeyboardHeight(0);
+
+    if (Capacitor.isNativePlatform()) {
+      const subs = [];
+      Keyboard.addListener("keyboardDidShow", (info) => onShow(info.keyboardHeight))
+        .then((sub) => subs.push(sub));
+      Keyboard.addListener("keyboardWillHide", onHide).then((sub) => subs.push(sub));
+      return () => subs.forEach((s) => s.remove());
+    }
+
+    if (typeof window !== "undefined" && window.visualViewport) {
+      const vv = window.visualViewport;
+      const onResize = () => {
+        const diff = window.innerHeight - vv.height;
+        if (diff > 150) onShow(diff);
+        else onHide();
+      };
+      vv.addEventListener("resize", onResize);
+      return () => vv.removeEventListener("resize", onResize);
+    }
+  }, []);
 
   useEffect(() => () => {
     clearTimeout(wrongFlashTimer.current);
@@ -254,7 +310,7 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
   const progress = (current / questions.length) * 100;
 
   return (
-    <div style={{ animation: "fadeUp 0.4s ease both", paddingBottom: keyboardOpen ? "40vh" : 0, transition: "padding-bottom 0.3s ease" }}>
+    <div style={{ animation: "fadeUp 0.4s ease both", paddingBottom: keyboardHeight > 0 ? `${keyboardHeight}px` : 0, transition: "padding-bottom 0.3s ease" }}>
       {/* Progress bar */}
       <div style={{ marginBottom: 20 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
@@ -338,6 +394,7 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
                 alignItems: "center",
                 gap: 16,
                 animation: isShaking ? "shake 0.3s ease" : undefined,
+                ...noCallout,
               }}
             >
               {/* Prominent letter badge */}
@@ -408,6 +465,7 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
             overflow: "hidden",
             maxWidth: "100%",
             touchAction: "manipulation",
+            ...noCallout,
           }}
         >
           <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 3, textTransform: "uppercase", color: "#a09a90", marginBottom: 10, fontFamily: "'Barlow Condensed', sans-serif" }}>
@@ -424,6 +482,7 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
             overflowWrap: "break-word",
             overflow: "hidden",
             maxWidth: "100%",
+            ...noCallout,
           }}>
             {targetText.split("").map((char, i) => {
               const typed = i < typedLength;
@@ -462,8 +521,6 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
-            onFocus={() => setKeyboardOpen(true)}
-            onBlur={() => setKeyboardOpen(false)}
             aria-label="Type your answer here"
             style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", opacity: 0, cursor: "text", fontSize: 16, border: "none", background: "transparent" }}
           />

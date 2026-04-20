@@ -17,7 +17,7 @@ export default function ResultsScreen({ answers, questions, ttsOn, onPlayAgain, 
 
   return (
     <div style={{ animation: "fadeUp 0.5s ease both" }}>
-      <div style={{ background: "linear-gradient(135deg,rgba(232,24,40,0.1),rgba(0,45,98,0.15))", border: "1px solid rgba(232,24,40,0.2)", borderRadius: 20, padding: "32px 24px", textAlign: "center", marginBottom: 20 }}>
+      <div aria-live="polite" aria-atomic="true" style={{ background: "linear-gradient(135deg,rgba(232,24,40,0.1),rgba(0,45,98,0.15))", border: "1px solid rgba(232,24,40,0.2)", borderRadius: 20, padding: "32px 24px", textAlign: "center", marginBottom: 20 }}>
         <div aria-hidden="true" style={{ fontSize: 56, marginBottom: 8 }}>{grade.emoji}</div>
         <div style={{ fontSize: 72, fontWeight: 900, color: grade.color, lineHeight: 1, fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: -1 }}>{score}%</div>
         <div style={{ fontSize: 13, fontWeight: 800, letterSpacing: 3, textTransform: "uppercase", color: grade.color, fontFamily: "'Barlow Condensed', sans-serif", marginTop: 6, marginBottom: 4 }}>{grade.label}</div>

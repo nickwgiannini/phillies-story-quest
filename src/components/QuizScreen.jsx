@@ -261,9 +261,9 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
           <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 3, textTransform: "uppercase", color: "#a09a90", fontFamily: "'Barlow Condensed', sans-serif" }}>
             Question {current + 1} of {questions.length}
           </span>
-          <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 2, color: "#E81828", fontFamily: "'Barlow Condensed', sans-serif", display: "flex", alignItems: "center", gap: 6 }}>
+          <span aria-live="polite" style={{ fontSize: 10, fontWeight: 800, letterSpacing: 2, color: "#E81828", fontFamily: "'Barlow Condensed', sans-serif", display: "flex", alignItems: "center", gap: 6 }}>
             {answers.filter((a) => a.correct).length} correct
-            {isSpeaking && <span role="img" aria-label="Speaking" style={{ display: "inline-block", animation: "speakPulse 1s ease infinite", fontSize: 12 }}>🔊</span>}
+            {isSpeaking && <span aria-hidden="true" style={{ display: "inline-block", animation: "speakPulse 1s ease infinite", fontSize: 12 }}>🔊</span>}
           </span>
         </div>
         <div style={{ background: "rgba(255,255,255,0.06)", borderRadius: 99, height: 4, overflow: "hidden" }}>
@@ -277,7 +277,7 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
       </div>
 
       {wrongAnswerMsg && (
-        <div style={{ background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.35)", borderRadius: 12, padding: "12px 16px", marginBottom: 14, display: "flex", alignItems: "center", gap: 10 }}>
+        <div role="alert" style={{ background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.35)", borderRadius: 12, padding: "12px 16px", marginBottom: 14, display: "flex", alignItems: "center", gap: 10 }}>
           <span aria-hidden="true" style={{ fontSize: 20, lineHeight: 1 }}>✗</span>
           <span style={{ fontSize: 15, color: "#f87171", fontWeight: 700, fontFamily: "'Barlow Condensed', sans-serif" }}>
             Wrong answer — try the other option!
@@ -446,7 +446,7 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
             {isComplete && <span role="img" aria-label="Answer complete" style={{ color: "#4ade80", marginLeft: 6, fontSize: 22 }}>✓</span>}
           </div>
           {wrongFlash && (
-            <div style={{ fontSize: 13, fontWeight: 700, color: "#f87171", marginTop: 8, fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: 1 }}>
+            <div role="alert" style={{ fontSize: 13, fontWeight: 700, color: "#f87171", marginTop: 8, fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: 1 }}>
               <span aria-hidden="true">✗</span> Wrong letter — try again
             </div>
           )}

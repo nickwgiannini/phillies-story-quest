@@ -140,7 +140,11 @@ export default function App() {
         <div style={{ ...inner, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh" }}>
           <span aria-hidden="true" style={{ fontSize: 48, marginBottom: 16 }}>⚾</span>
           <LoadingDots />
-          <div style={{ fontSize: 13, color: "#a09a90", marginTop: 12, fontWeight: 600 }}>{error ? "Error: " + error : "Loading latest Phillies game..."}</div>
+          {error ? (
+            <div role="alert" style={{ fontSize: 13, color: "#a09a90", marginTop: 12, fontWeight: 600 }}>Error: {error}</div>
+          ) : (
+            <div style={{ fontSize: 13, color: "#a09a90", marginTop: 12, fontWeight: 600 }}>Loading latest Phillies game...</div>
+          )}
           {error && <button onClick={() => loadGame()} style={{ marginTop: 16, background: "rgba(232,24,40,0.15)", border: "1px solid rgba(232,24,40,0.3)", borderRadius: 10, padding: "10px 20px", color: "#E81828", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Retry</button>}
         </div>
       </div>

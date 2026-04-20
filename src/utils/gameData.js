@@ -23,7 +23,9 @@ async function findRecentCompletedGame() {
       `${String(date.getMonth() + 1).padStart(2, "0")}` +
       `${String(date.getDate()).padStart(2, "0")}`;
     try {
-      const res = await fetch(`${ESPN_SCOREBOARD_URL}?dates=${dateStr}`);
+      // cache:'no-store' + cache-busting query — the WKWebView/Android WebView
+      // will otherwise serve a stale scoreboard and we'll show yesterday's game.
+      const res = await fetch(`${ESPN_SCOREBOARD_URL}?dates=${dateStr}&_=${Date.now()}`, { cache: "no-store" });
       const data = await res.json();
       const phiGame = (data?.events ?? []).find((e) => {
         const comp = e.competitions?.[0];
@@ -40,7 +42,7 @@ async function findRecentCompletedGame() {
 
 // Fallback: use the team schedule endpoint
 async function fetchFromSchedule() {
-  const res = await fetch(ESPN_SCHEDULE_URL);
+  const res = await fetch(`${ESPN_SCHEDULE_URL}?_=${Date.now()}`, { cache: "no-store" });
   const data = await res.json();
   const completed = (data?.events ?? [])
     .filter((e) => e.competitions?.[0]?.status?.type?.completed)
@@ -78,9 +80,19 @@ async function parseGameEvent(game) {
   };
 }
 
+// Bump this suffix any time the prompt, response shape, or validation rules
+// in generateContentFromBoxScore change in a way that would make previously
+// cached AI output invalid (e.g. new required field, different question count).
+// Bumping forces every device to regenerate fresh content from Claude.
+// History: v1 (initial) -> v2 (added 'labels' field) -> v3 (banned "nil" in prompt).
+const CONTENT_CACHE_VERSION = "v3";
+
+export function buildContentCacheKey(gameId) {
+  return `phillies_content_${CONTENT_CACHE_VERSION}_${gameId}`;
+}
+
 async function generateContentFromBoxScore(gameId, boxScore, gameInfo) {
-  // v3: cache key bumped to force regeneration after prompt update banning "nil"
-  const cacheKey = `phillies_content_v3_${gameId}`;
+  const cacheKey = buildContentCacheKey(gameId);
   try {
     const cached = localStorage.getItem(cacheKey);
     if (cached) {
@@ -179,7 +191,7 @@ CRITICAL RULES — read carefully:
     const cleaned = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
     const result = JSON.parse(cleaned);
     try {
-      localStorage.setItem(`phillies_content_v3_${gameId}`, JSON.stringify(result));
+      localStorage.setItem(cacheKey, JSON.stringify(result));
     } catch {}
     return result;
   } catch (err) {
@@ -194,7 +206,8 @@ CRITICAL RULES — read carefully:
 async function fetchBoxScore(gameId) {
   try {
     const res = await fetch(
-      `https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/summary?event=${gameId}`
+      `https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/summary?event=${gameId}&_=${Date.now()}`,
+      { cache: "no-store" }
     );
     const data = await res.json();
     const batters = [];

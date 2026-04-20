@@ -1,6 +1,6 @@
 ﻿import React, { useState, useEffect, useRef } from "react";
 import { loadDB, saveDB } from "./utils/storage.js";
-import { fetchLatestPhilliesGame } from "./utils/gameData.js";
+import { fetchLatestPhilliesGame, buildContentCacheKey } from "./utils/gameData.js";
 import { requestNotificationPermission, sendLocalNotification } from "./utils/notifications.js";
 import { stopSpeech } from "./utils/tts.js";
 import TopBar from "./components/TopBar.jsx";
@@ -21,29 +21,39 @@ export default function App() {
   const [content, setContent] = useState(null);
   const [answers, setAnswers] = useState([]);
   const [ttsOn, setTtsOn] = useState(true);
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
   const [notifStatus, setNotifStatus] = useState(() => (typeof Notification !== "undefined" ? Notification.permission : "unsupported"));
   const [error, setError] = useState(null);
   const pollRef = useRef(null);
   const dbRef = useRef(db);
   useEffect(() => { dbRef.current = db; }, [db]);
 
-  // Unlock Web Speech API on first user interaction (browsers block autoplay until then)
-  useEffect(() => {
-    const unlockAudio = () => {
-      if (window.speechSynthesis) {
-        const utt = new SpeechSynthesisUtterance('');
+  // Unlock Web Speech API on first user interaction (browsers block autoplay until then).
+  // StoryScreen waits for audioUnlocked before starting narration, and shows a
+  // tap-to-start hint if it hasn't happened yet.
+  const unlockAudio = React.useCallback(() => {
+    if (window.speechSynthesis) {
+      try {
+        const utt = new SpeechSynthesisUtterance("");
+        utt.volume = 0;
         window.speechSynthesis.speak(utt);
-      }
-      document.removeEventListener('touchstart', unlockAudio);
-      document.removeEventListener('click', unlockAudio);
-    };
-    document.addEventListener('touchstart', unlockAudio);
-    document.addEventListener('click', unlockAudio);
-    return () => {
-      document.removeEventListener('touchstart', unlockAudio);
-      document.removeEventListener('click', unlockAudio);
-    };
+      } catch {}
+    }
+    setAudioUnlocked(true);
   }, []);
+
+  useEffect(() => {
+    if (audioUnlocked) return;
+    const handler = () => unlockAudio();
+    document.addEventListener("touchstart", handler, { once: true, passive: true });
+    document.addEventListener("click", handler, { once: true });
+    document.addEventListener("keydown", handler, { once: true });
+    return () => {
+      document.removeEventListener("touchstart", handler);
+      document.removeEventListener("click", handler);
+      document.removeEventListener("keydown", handler);
+    };
+  }, [audioUnlocked, unlockAudio]);
 
   useEffect(() => { loadGame(); }, []);
 
@@ -60,7 +70,7 @@ export default function App() {
         // Clear localStorage cache so generateContentFromBoxScore re-generates
         try {
           const currentDb = dbRef.current;
-          if (currentDb.lastGameId) localStorage.removeItem(`phillies_content_v3_${currentDb.lastGameId}`);
+          if (currentDb.lastGameId) localStorage.removeItem(buildContentCacheKey(currentDb.lastGameId));
         } catch {}
       }
       const latestGame = await fetchLatestPhilliesGame();
@@ -122,7 +132,7 @@ export default function App() {
   const overallAvg = db.sessions.length > 0 ? Math.round(db.sessions.reduce((s, x) => s + x.score, 0) / db.sessions.length) : null;
   const outer = { minHeight: "100vh", background: "radial-gradient(ellipse at 20% 0%,rgba(0,45,98,0.25) 0%,transparent 60%),radial-gradient(ellipse at 80% 100%,rgba(232,24,40,0.1) 0%,transparent 50%),#0a0f14" };
   // paddingBottom 200px ensures content is always reachable above the tablet keyboard
-  const inner = { maxWidth: 560, margin: "0 auto", padding: "16px 18px 200px" };
+  const inner = { maxWidth: 640, margin: "0 auto", padding: "16px 18px 200px" };
 
   if (screen === SCREENS.LOADING) {
     return (
@@ -130,7 +140,11 @@ export default function App() {
         <div style={{ ...inner, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh" }}>
           <span aria-hidden="true" style={{ fontSize: 48, marginBottom: 16 }}>⚾</span>
           <LoadingDots />
-          <div style={{ fontSize: 13, color: "#a09a90", marginTop: 12, fontWeight: 600 }}>{error ? "Error: " + error : "Loading latest Phillies game..."}</div>
+          {error ? (
+            <div role="alert" style={{ fontSize: 13, color: "#a09a90", marginTop: 12, fontWeight: 600 }}>Error: {error}</div>
+          ) : (
+            <div style={{ fontSize: 13, color: "#a09a90", marginTop: 12, fontWeight: 600 }}>Loading latest Phillies game...</div>
+          )}
           {error && <button onClick={() => loadGame()} style={{ marginTop: 16, background: "rgba(232,24,40,0.15)", border: "1px solid rgba(232,24,40,0.3)", borderRadius: 10, padding: "10px 20px", color: "#E81828", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Retry</button>}
         </div>
       </div>
@@ -148,7 +162,7 @@ export default function App() {
             <GameHeader game={game} />
           </div>
         )}
-        {screen === SCREENS.STORY && <StoryScreen story={content?.story} ttsOn={ttsOn} onStartQuiz={() => { stopSpeech(); setScreen(SCREENS.QUIZ); }} />}
+        {screen === SCREENS.STORY && <StoryScreen story={content?.story} ttsOn={ttsOn} audioUnlocked={audioUnlocked} onUnlockAudio={unlockAudio} onStartQuiz={() => { stopSpeech(); setScreen(SCREENS.QUIZ); }} />}
         {screen === SCREENS.QUIZ && content?.questions?.length > 0 && <QuizScreen questions={content.questions} ttsOn={ttsOn} onFinish={handleQuizFinish} />}
         {screen === SCREENS.QUIZ && !(content?.questions?.length > 0) && (
           <div style={{ textAlign: "center", padding: "40px 20px" }}>

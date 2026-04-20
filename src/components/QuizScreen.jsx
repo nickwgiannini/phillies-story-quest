@@ -1,5 +1,14 @@
 import React, { useState, useEffect, useRef } from "react";
+import { Capacitor } from "@capacitor/core";
+import { Keyboard } from "@capacitor/keyboard";
 import { speak, stopSpeech } from "../utils/tts.js";
+
+// Suppress iOS long-press context menus (define/share) and accent pickers on non-input elements.
+const noCallout = {
+  WebkitTouchCallout: "none",
+  WebkitUserSelect: "none",
+  userSelect: "none",
+};
 
 // Map characters to spoken labels; spaces explicitly announced
 function getCharLabel(char) {
@@ -32,9 +41,10 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
   const [wrongAnswerMsg, setWrongAnswerMsg] = useState(false);
   const [wrongOptionIdx, setWrongOptionIdx] = useState(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [lastCorrectIdx, setLastCorrectIdx] = useState(-1);
   const [shakingIdx, setShakingIdx] = useState(null);
+  const [typingMode, setTypingMode] = useState("type");
 
   const inputRef = useRef(null);
   const typingAreaRef = useRef(null);
@@ -47,6 +57,7 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
   const q = questions[current];
   const targetText = selectedOption !== null ? q.a[selectedOption] : "";
   const isComplete = targetText.length > 0 && typedLength === targetText.length;
+  const submitEnabled = (typingMode === "tap" && selectedOption !== null) || isComplete;
 
   // Current char — every character including spaces must be typed
   const currentCharIdx =
@@ -81,16 +92,63 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
     };
   }, [current, ttsOn]);
 
-  // Scroll typing area into view after option selection.
-  // 350ms delay lets the tablet keyboard finish opening before scrolling.
+  // Focus the hidden input after option selection. Keyboard event listeners (below)
+  // handle scrolling once we know the real keyboard height.
   useEffect(() => {
     if (selectedOption !== null) {
-      setTimeout(() => {
-        typingAreaRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      const t = setTimeout(() => {
         inputRef.current?.focus();
-      }, 350);
+        // If keyboard is already open (e.g., switching options), event won't re-fire — scroll now.
+        if (keyboardHeight > 0) {
+          scrollTypingAreaIntoView(keyboardHeight);
+        }
+      }, 100);
+      return () => clearTimeout(t);
     }
-  }, [selectedOption]);
+  }, [selectedOption]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Scroll so the typing area's bottom sits above the keyboard with a small gap.
+  function scrollTypingAreaIntoView(height) {
+    const el = typingAreaRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const visibleBottom = window.innerHeight - height;
+    const gap = 24;
+    if (rect.bottom > visibleBottom - gap) {
+      window.scrollBy({ top: rect.bottom - visibleBottom + gap, behavior: "smooth" });
+    } else if (rect.top < 0) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }
+
+  // Track real keyboard height via Capacitor plugin (native) or visualViewport (web).
+  // This replaces the prior 350ms-guess scroll and the 40vh paddingBottom guess.
+  useEffect(() => {
+    const onShow = (height) => {
+      setKeyboardHeight(height);
+      requestAnimationFrame(() => scrollTypingAreaIntoView(height));
+    };
+    const onHide = () => setKeyboardHeight(0);
+
+    if (Capacitor.isNativePlatform()) {
+      const subs = [];
+      Keyboard.addListener("keyboardDidShow", (info) => onShow(info.keyboardHeight))
+        .then((sub) => subs.push(sub));
+      Keyboard.addListener("keyboardWillHide", onHide).then((sub) => subs.push(sub));
+      return () => subs.forEach((s) => s.remove());
+    }
+
+    if (typeof window !== "undefined" && window.visualViewport) {
+      const vv = window.visualViewport;
+      const onResize = () => {
+        const diff = window.innerHeight - vv.height;
+        if (diff > 150) onShow(diff);
+        else onHide();
+      };
+      vv.addEventListener("resize", onResize);
+      return () => vv.removeEventListener("resize", onResize);
+    }
+  }, []);
 
   useEffect(() => () => {
     clearTimeout(wrongFlashTimer.current);
@@ -125,6 +183,7 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
       ttsActive.current = true;
       speak(label, () => {
         if (!ttsActive.current) return;
+        if (typingMode === "tap") return;
         setTimeout(() => {
           if (!ttsActive.current) return;
           speak(getCharLabel(fullAnswer[0]));
@@ -213,6 +272,7 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
             setCurrent((c) => c + 1);
             setSelectedOption(null); setTypedLength(0); setWrongFlash(false);
             setFirstAttemptWrong(false); setWrongAnswerMsg(false); setWrongOptionIdx(null);
+            setTypingMode("type");
             clearTimeout(wrongFlashTimer.current);
             if (inputRef.current) inputRef.current.value = "";
           }
@@ -246,6 +306,7 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
 
       setFirstAttemptWrong(true); setWrongAnswerMsg(true); setWrongOptionIdx(selectedOption);
       setSelectedOption(null); setTypedLength(0); setWrongFlash(false);
+      setTypingMode("type");
       clearTimeout(wrongFlashTimer.current);
       if (inputRef.current) inputRef.current.value = "";
     }
@@ -254,16 +315,16 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
   const progress = (current / questions.length) * 100;
 
   return (
-    <div style={{ animation: "fadeUp 0.4s ease both", paddingBottom: keyboardOpen ? "40vh" : 0, transition: "padding-bottom 0.3s ease" }}>
+    <div style={{ animation: "fadeUp 0.4s ease both", paddingBottom: keyboardHeight > 0 ? `${keyboardHeight}px` : 0, transition: "padding-bottom 0.3s ease" }}>
       {/* Progress bar */}
       <div style={{ marginBottom: 20 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
           <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 3, textTransform: "uppercase", color: "#a09a90", fontFamily: "'Barlow Condensed', sans-serif" }}>
             Question {current + 1} of {questions.length}
           </span>
-          <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 2, color: "#E81828", fontFamily: "'Barlow Condensed', sans-serif", display: "flex", alignItems: "center", gap: 6 }}>
+          <span aria-live="polite" style={{ fontSize: 10, fontWeight: 800, letterSpacing: 2, color: "#E81828", fontFamily: "'Barlow Condensed', sans-serif", display: "flex", alignItems: "center", gap: 6 }}>
             {answers.filter((a) => a.correct).length} correct
-            {isSpeaking && <span role="img" aria-label="Speaking" style={{ display: "inline-block", animation: "speakPulse 1s ease infinite", fontSize: 12 }}>🔊</span>}
+            {isSpeaking && <span aria-hidden="true" style={{ display: "inline-block", animation: "speakPulse 1s ease infinite", fontSize: 12 }}>🔊</span>}
           </span>
         </div>
         <div style={{ background: "rgba(255,255,255,0.06)", borderRadius: 99, height: 4, overflow: "hidden" }}>
@@ -272,12 +333,53 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
       </div>
 
       {/* Question text */}
-      <div style={{ fontSize: 22, fontWeight: 700, color: "#FAEBD7", lineHeight: 1.5, marginBottom: 20, fontFamily: "'Barlow Condensed', sans-serif" }}>
+      <div style={{ fontSize: 26, fontWeight: 700, color: "#FAEBD7", lineHeight: 1.5, marginBottom: 14, fontFamily: "'Barlow Condensed', sans-serif" }}>
         {q.q}
       </div>
 
+      {/* Typing-mode toggle — bypass the per-character typing step for this question */}
+      {!isComplete && (
+        <button
+          onClick={() => setTypingMode((m) => (m === "type" ? "tap" : "type"))}
+          aria-label={typingMode === "type" ? "Switch to tap-only answering" : "Switch to type-the-answer mode"}
+          style={{
+            background: typingMode === "tap" ? "rgba(240,192,64,0.12)" : "rgba(255,255,255,0.05)",
+            border: `1px solid ${typingMode === "tap" ? "rgba(240,192,64,0.5)" : "rgba(255,255,255,0.15)"}`,
+            borderRadius: 99,
+            padding: "6px 14px",
+            fontSize: 11,
+            fontWeight: 800,
+            letterSpacing: 1.5,
+            textTransform: "uppercase",
+            fontFamily: "'Barlow Condensed', sans-serif",
+            color: typingMode === "tap" ? "#F0C040" : "#c8c0b4",
+            cursor: "pointer",
+            minHeight: 44,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            marginBottom: 18,
+            touchAction: "manipulation",
+            transition: "all 0.15s ease",
+          }}
+        >
+          <span
+            aria-hidden="true"
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: "50%",
+              background: typingMode === "tap" ? "#F0C040" : "#c8c0b4",
+              display: "inline-block",
+              transition: "background 0.15s ease",
+            }}
+          />
+          {typingMode === "tap" ? "Tap to answer" : "Type to answer"}
+        </button>
+      )}
+
       {wrongAnswerMsg && (
-        <div style={{ background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.35)", borderRadius: 12, padding: "12px 16px", marginBottom: 14, display: "flex", alignItems: "center", gap: 10 }}>
+        <div role="alert" style={{ background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.35)", borderRadius: 12, padding: "12px 16px", marginBottom: 14, display: "flex", alignItems: "center", gap: 10 }}>
           <span aria-hidden="true" style={{ fontSize: 20, lineHeight: 1 }}>✗</span>
           <span style={{ fontSize: 15, color: "#f87171", fontWeight: 700, fontFamily: "'Barlow Condensed', sans-serif" }}>
             Wrong answer — try the other option!
@@ -338,6 +440,7 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
                 alignItems: "center",
                 gap: 16,
                 animation: isShaking ? "shake 0.3s ease" : undefined,
+                ...noCallout,
               }}
             >
               {/* Prominent letter badge */}
@@ -363,7 +466,7 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
               {/* Short label text */}
               <div style={{ flex: 1 }}>
                 <p style={{
-                  fontSize: 19,
+                  fontSize: 22,
                   fontWeight: 700,
                   color: labelColor,
                   lineHeight: 1.35,
@@ -392,7 +495,7 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
       </div>
 
       {/* Typing area — shown after option is selected, displays the FULL answer to type */}
-      {selectedOption !== null && (
+      {selectedOption !== null && typingMode === "type" && (
         <div
           ref={typingAreaRef}
           onClick={() => inputRef.current?.focus()}
@@ -408,14 +511,15 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
             overflow: "hidden",
             maxWidth: "100%",
             touchAction: "manipulation",
+            ...noCallout,
           }}
         >
-          <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 3, textTransform: "uppercase", color: "#a09a90", marginBottom: 10, fontFamily: "'Barlow Condensed', sans-serif" }}>
+          <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 3, textTransform: "uppercase", color: "#a09a90", marginBottom: 10, fontFamily: "'Barlow Condensed', sans-serif" }}>
             Type the answer:
           </div>
           {/* Full answer text — no letter-spacing, break-word so long answers wrap cleanly */}
           <div style={{
-            fontSize: 16,
+            fontSize: 22,
             fontWeight: 700,
             letterSpacing: 0,
             lineHeight: 1.9,
@@ -424,6 +528,7 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
             overflowWrap: "break-word",
             overflow: "hidden",
             maxWidth: "100%",
+            ...noCallout,
           }}>
             {targetText.split("").map((char, i) => {
               const typed = i < typedLength;
@@ -443,10 +548,10 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
                 </span>
               );
             })}
-            {isComplete && <span role="img" aria-label="Answer complete" style={{ color: "#4ade80", marginLeft: 6, fontSize: 16 }}>✓</span>}
+            {isComplete && <span role="img" aria-label="Answer complete" style={{ color: "#4ade80", marginLeft: 6, fontSize: 22 }}>✓</span>}
           </div>
           {wrongFlash && (
-            <div style={{ fontSize: 10, fontWeight: 700, color: "#f87171", marginTop: 8, fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: 1 }}>
+            <div role="alert" style={{ fontSize: 13, fontWeight: 700, color: "#f87171", marginTop: 8, fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: 1 }}>
               <span aria-hidden="true">✗</span> Wrong letter — try again
             </div>
           )}
@@ -462,15 +567,13 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
-            onFocus={() => setKeyboardOpen(true)}
-            onBlur={() => setKeyboardOpen(false)}
             aria-label="Type your answer here"
             style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", opacity: 0, cursor: "text", fontSize: 16, border: "none", background: "transparent" }}
           />
         </div>
       )}
 
-      {isComplete && (
+      {submitEnabled && (
         <button
           onClick={handleSubmit}
           aria-label={current + 1 >= questions.length ? "See results" : "Submit answer"}

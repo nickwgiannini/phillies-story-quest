@@ -19,7 +19,7 @@ export default function TopBar({ ttsOn, setTtsOn, overallAvg, onHistory, notifSt
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 0 20px", flexWrap: "wrap", gap: 8 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <div style={{ position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
-          <span style={{ fontSize: 30, lineHeight: 1 }}>⚾</span>
+          <span aria-hidden="true" style={{ fontSize: 30, lineHeight: 1 }}>⚾</span>
           {overallAvg !== null && (
             <span style={{
               position: "absolute", bottom: -4, right: -14,

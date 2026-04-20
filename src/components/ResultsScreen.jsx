@@ -29,7 +29,7 @@ export default function ResultsScreen({ answers, questions, ttsOn, onPlayAgain, 
         {answers.map((a, i) => (
           <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 12, background: a.correct ? "rgba(74,222,128,0.05)" : "rgba(248,113,113,0.05)", border: `1px solid ${a.correct ? "rgba(74,222,128,0.15)" : "rgba(248,113,113,0.15)"}`, borderRadius: 10, padding: "10px 14px" }}>
             <span role="img" aria-label={a.correct ? "Correct" : "Wrong"} style={{ fontSize: 14, marginTop: 1 }}>{a.correct ? "✅" : "❌"}</span>
-            <span style={{ fontSize: 13, color: "#c8c0b4", lineHeight: 1.5, flex: 1 }}>{questions[i]?.q}</span>
+            <span style={{ fontSize: 16, color: "#c8c0b4", lineHeight: 1.5, flex: 1 }}>{questions[i]?.q}</span>
           </div>
         ))}
       </div>

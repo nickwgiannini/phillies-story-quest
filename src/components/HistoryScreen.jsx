@@ -42,8 +42,8 @@ export default function HistoryScreen({ db, setDb, onBack }) {
             <div key={s.id} style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 12, padding: "14px 16px", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
               <span aria-hidden="true" style={{ fontSize: 22 }}>⚾</span>
               <div style={{ flex: 1, minWidth: 120 }}>
-                <div style={{ fontWeight: 700, fontSize: 13, color: "#FAEBD7", marginBottom: 2 }}>{s.game || "Phillies Game"}</div>
-                <div style={{ fontSize: 11, color: "#a09a90", fontWeight: 600 }}>{s.date}</div>
+                <div style={{ fontWeight: 700, fontSize: 16, color: "#FAEBD7", marginBottom: 2 }}>{s.game || "Phillies Game"}</div>
+                <div style={{ fontSize: 13, color: "#a09a90", fontWeight: 600 }}>{s.date}</div>
               </div>
               <div style={{ textAlign: "right" }}>
                 <div style={{ fontSize: 26, fontWeight: 900, fontFamily: "'Barlow Condensed', sans-serif", color: s.score >= 70 ? "#4ade80" : s.score >= 50 ? "#F0C040" : "#f87171", lineHeight: 1 }}>{s.score}%</div>

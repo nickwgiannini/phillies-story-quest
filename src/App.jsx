@@ -122,7 +122,7 @@ export default function App() {
   const overallAvg = db.sessions.length > 0 ? Math.round(db.sessions.reduce((s, x) => s + x.score, 0) / db.sessions.length) : null;
   const outer = { minHeight: "100vh", background: "radial-gradient(ellipse at 20% 0%,rgba(0,45,98,0.25) 0%,transparent 60%),radial-gradient(ellipse at 80% 100%,rgba(232,24,40,0.1) 0%,transparent 50%),#0a0f14" };
   // paddingBottom 200px ensures content is always reachable above the tablet keyboard
-  const inner = { maxWidth: 560, margin: "0 auto", padding: "16px 18px 200px" };
+  const inner = { maxWidth: 640, margin: "0 auto", padding: "16px 18px 200px" };
 
   if (screen === SCREENS.LOADING) {
     return (

@@ -272,7 +272,7 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
       </div>
 
       {/* Question text */}
-      <div style={{ fontSize: 22, fontWeight: 700, color: "#FAEBD7", lineHeight: 1.5, marginBottom: 20, fontFamily: "'Barlow Condensed', sans-serif" }}>
+      <div style={{ fontSize: 26, fontWeight: 700, color: "#FAEBD7", lineHeight: 1.5, marginBottom: 20, fontFamily: "'Barlow Condensed', sans-serif" }}>
         {q.q}
       </div>
 
@@ -363,7 +363,7 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
               {/* Short label text */}
               <div style={{ flex: 1 }}>
                 <p style={{
-                  fontSize: 19,
+                  fontSize: 22,
                   fontWeight: 700,
                   color: labelColor,
                   lineHeight: 1.35,
@@ -410,12 +410,12 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
             touchAction: "manipulation",
           }}
         >
-          <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 3, textTransform: "uppercase", color: "#a09a90", marginBottom: 10, fontFamily: "'Barlow Condensed', sans-serif" }}>
+          <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 3, textTransform: "uppercase", color: "#a09a90", marginBottom: 10, fontFamily: "'Barlow Condensed', sans-serif" }}>
             Type the answer:
           </div>
           {/* Full answer text — no letter-spacing, break-word so long answers wrap cleanly */}
           <div style={{
-            fontSize: 16,
+            fontSize: 22,
             fontWeight: 700,
             letterSpacing: 0,
             lineHeight: 1.9,
@@ -443,10 +443,10 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
                 </span>
               );
             })}
-            {isComplete && <span role="img" aria-label="Answer complete" style={{ color: "#4ade80", marginLeft: 6, fontSize: 16 }}>✓</span>}
+            {isComplete && <span role="img" aria-label="Answer complete" style={{ color: "#4ade80", marginLeft: 6, fontSize: 22 }}>✓</span>}
           </div>
           {wrongFlash && (
-            <div style={{ fontSize: 10, fontWeight: 700, color: "#f87171", marginTop: 8, fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#f87171", marginTop: 8, fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: 1 }}>
               <span aria-hidden="true">✗</span> Wrong letter — try again
             </div>
           )}

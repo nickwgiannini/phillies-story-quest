@@ -50,7 +50,7 @@ export default function StoryScreen({ story, ttsOn, onStartQuiz, loading }) {
             <div style={{ fontSize: 13, color: "#a09a90", marginTop: 10, fontWeight: 600 }}>Generating recap...</div>
           </div>
         ) : (
-          <p style={{ fontSize: 20, lineHeight: 1.75, color: "#c8c0b4", fontStyle: "italic", margin: 0 }}>"{story}"</p>
+          <p style={{ fontSize: 24, lineHeight: 1.75, color: "#c8c0b4", fontStyle: "italic", margin: 0 }}>"{story}"</p>
         )}
       </div>
       {!loading && (

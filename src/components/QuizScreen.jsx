@@ -44,6 +44,7 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [lastCorrectIdx, setLastCorrectIdx] = useState(-1);
   const [shakingIdx, setShakingIdx] = useState(null);
+  const [typingMode, setTypingMode] = useState("type");
 
   const inputRef = useRef(null);
   const typingAreaRef = useRef(null);
@@ -56,6 +57,7 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
   const q = questions[current];
   const targetText = selectedOption !== null ? q.a[selectedOption] : "";
   const isComplete = targetText.length > 0 && typedLength === targetText.length;
+  const submitEnabled = (typingMode === "tap" && selectedOption !== null) || isComplete;
 
   // Current char — every character including spaces must be typed
   const currentCharIdx =
@@ -181,6 +183,7 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
       ttsActive.current = true;
       speak(label, () => {
         if (!ttsActive.current) return;
+        if (typingMode === "tap") return;
         setTimeout(() => {
           if (!ttsActive.current) return;
           speak(getCharLabel(fullAnswer[0]));
@@ -269,6 +272,7 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
             setCurrent((c) => c + 1);
             setSelectedOption(null); setTypedLength(0); setWrongFlash(false);
             setFirstAttemptWrong(false); setWrongAnswerMsg(false); setWrongOptionIdx(null);
+            setTypingMode("type");
             clearTimeout(wrongFlashTimer.current);
             if (inputRef.current) inputRef.current.value = "";
           }
@@ -302,6 +306,7 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
 
       setFirstAttemptWrong(true); setWrongAnswerMsg(true); setWrongOptionIdx(selectedOption);
       setSelectedOption(null); setTypedLength(0); setWrongFlash(false);
+      setTypingMode("type");
       clearTimeout(wrongFlashTimer.current);
       if (inputRef.current) inputRef.current.value = "";
     }
@@ -328,9 +333,50 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
       </div>
 
       {/* Question text */}
-      <div style={{ fontSize: 26, fontWeight: 700, color: "#FAEBD7", lineHeight: 1.5, marginBottom: 20, fontFamily: "'Barlow Condensed', sans-serif" }}>
+      <div style={{ fontSize: 26, fontWeight: 700, color: "#FAEBD7", lineHeight: 1.5, marginBottom: 14, fontFamily: "'Barlow Condensed', sans-serif" }}>
         {q.q}
       </div>
+
+      {/* Typing-mode toggle — bypass the per-character typing step for this question */}
+      {!isComplete && (
+        <button
+          onClick={() => setTypingMode((m) => (m === "type" ? "tap" : "type"))}
+          aria-label={typingMode === "type" ? "Switch to tap-only answering" : "Switch to type-the-answer mode"}
+          style={{
+            background: typingMode === "tap" ? "rgba(240,192,64,0.12)" : "rgba(255,255,255,0.05)",
+            border: `1px solid ${typingMode === "tap" ? "rgba(240,192,64,0.5)" : "rgba(255,255,255,0.15)"}`,
+            borderRadius: 99,
+            padding: "6px 14px",
+            fontSize: 11,
+            fontWeight: 800,
+            letterSpacing: 1.5,
+            textTransform: "uppercase",
+            fontFamily: "'Barlow Condensed', sans-serif",
+            color: typingMode === "tap" ? "#F0C040" : "#c8c0b4",
+            cursor: "pointer",
+            minHeight: 44,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            marginBottom: 18,
+            touchAction: "manipulation",
+            transition: "all 0.15s ease",
+          }}
+        >
+          <span
+            aria-hidden="true"
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: "50%",
+              background: typingMode === "tap" ? "#F0C040" : "#c8c0b4",
+              display: "inline-block",
+              transition: "background 0.15s ease",
+            }}
+          />
+          {typingMode === "tap" ? "Tap to answer" : "Type to answer"}
+        </button>
+      )}
 
       {wrongAnswerMsg && (
         <div role="alert" style={{ background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.35)", borderRadius: 12, padding: "12px 16px", marginBottom: 14, display: "flex", alignItems: "center", gap: 10 }}>
@@ -449,7 +495,7 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
       </div>
 
       {/* Typing area — shown after option is selected, displays the FULL answer to type */}
-      {selectedOption !== null && (
+      {selectedOption !== null && typingMode === "type" && (
         <div
           ref={typingAreaRef}
           onClick={() => inputRef.current?.focus()}
@@ -527,7 +573,7 @@ export default function QuizScreen({ questions, ttsOn, onFinish }) {
         </div>
       )}
 
-      {isComplete && (
+      {submitEnabled && (
         <button
           onClick={handleSubmit}
           aria-label={current + 1 >= questions.length ? "See results" : "Submit answer"}
